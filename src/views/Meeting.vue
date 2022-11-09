@@ -1,13 +1,13 @@
 <template>
   <div class="container">
-    <h5 class="text-lg text-gray-600 py-8">
+    <h5 class="text-lg text-gray-600 py-4">
       当前房间<span class="ml-4 badge badge-primary">{{ roomID }}</span>
     </h5>
     <div>
-      <div class="px-2 pb-4 flex">
+      <div class="px-2 flex">
         <div class="w-72">
           <p class="pl-2 leading-10">本地节点</p>
-          <video class="h-32 m-0 rounded-xl shadow-xl" autoplay ref="localRef"></video>
+          <video class="h-40 m-0 rounded-xl shadow-xl" autoplay ref="localRef"></video>
           <p class="leading-10 py-4">
             节点 <span class="badge">{{ nodeID }}</span>
           </p>
@@ -31,23 +31,23 @@
         </div>
         <div class="flex-1 flex">
           <div class="px-8 flex flex-col">
-            <div class="mb-4 flex-1 bg-slate-100 rounded">
-              <div class="px-4 pt-2" v-for="(v, i) in incomeMsgs" :key="i">
-                <div>
-                  <span class="badge badge-primary">{{v.node}}</span>
-                  <span class="pl-2">{{v.data}}</span>
+            <div class="h-60 overflow-y-auto bg-slate-100 rounded-xl mb-4">
+                <div class="px-4 pt-2" v-for="(v, i) in incomeMsgs" :key="i">
+                  <div>
+                    <span class="badge badge-primary">{{v.node}}</span>
+                    <span class="pl-2">{{v.data}}</span>
+                  </div>
                 </div>
-              </div>
             </div>
             <div class="form-control">
               <div class="input-group input-group-sm">
                 <input type="text" placeholder="广播消息" class="input input-bordered" v-model="broadcastMsg" />
-                <span class="cursor-pointer" @click="broadcast">广播</span>
+                <span class="cursor-pointer" @click="broadcast">发送</span>
               </div>
             </div>
           </div>
           <div class="px-8 flex flex-col">
-            <div class="mb-4 flex-1 bg-slate-100 rounded">
+            <div class="h-60 overflow-y-auto bg-slate-100 rounded-xl mb-4">
               <div class="px-4 pt-2" v-for="(v, i) in incomeDatas" :key="i">
                 <div>
                   <span class="badge badge-primary">{{v.node}}</span>
@@ -57,8 +57,8 @@
             </div>
             <div class="form-control">
               <div class="input-group input-group-sm">
-                <input type="text" placeholder="频道消息" class="input input-bordered" v-model="datachannelMsg" />
-                <span class="cursor-pointer" @click="sendDataChannel">数据频道</span>
+                <input type="text" placeholder="数据频道消息" class="input input-bordered" v-model="datachannelMsg" />
+                <span class="cursor-pointer" @click="sendDataChannel">发送</span>
               </div>
             </div>
           </div>
@@ -66,7 +66,7 @@
       </div>
       <div class="divider"></div>
       <div class="px-2 pb-4">
-        <p class="leading-10 pb-4">远程节点</p>
+        <p class="leading-10 pb-2">远程节点</p>
         <div class="grid grid-cols-4 gap-4" ref="remoteRef">
           <div v-for="(n, i) in nodes" :key="i">
             <video :id="i" class="rounded-xl shadow-xl"></video>
