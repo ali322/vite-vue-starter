@@ -3,7 +3,7 @@ import { RouterView, RouterLink } from 'vue-router'
 </script>
 
 <template>
-  <div class="navbar bg-base-100">
+  <div class="navbar bg-gray-800 text-white">
     <div class="flex-1">
       <span class="btn btn-ghost normal-case text-xl">Starter</span>
     </div>
