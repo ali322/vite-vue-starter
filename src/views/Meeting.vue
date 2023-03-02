@@ -32,12 +32,12 @@
         <div class="flex-1 flex">
           <div class="px-8 flex flex-col">
             <div class="h-60 overflow-y-auto bg-slate-100 rounded-xl mb-4">
-                <div class="px-4 pt-2" v-for="(v, i) in incomeMsgs" :key="i">
-                  <div>
-                    <span class="badge badge-primary">{{v.node}}</span>
-                    <span class="pl-2">{{v.data}}</span>
-                  </div>
+              <div class="px-4 pt-2" v-for="(v, i) in incomeMsgs" :key="i">
+                <div>
+                  <span class="badge badge-primary">{{ v.node }}</span>
+                  <span class="pl-2">{{ v.data }}</span>
                 </div>
+              </div>
             </div>
             <div class="form-control">
               <div class="input-group input-group-sm">
@@ -50,8 +50,8 @@
             <div class="h-60 overflow-y-auto bg-slate-100 rounded-xl mb-4">
               <div class="px-4 pt-2" v-for="(v, i) in incomeDatas" :key="i">
                 <div>
-                  <span class="badge badge-primary">{{v.node}}</span>
-                  <span class="pl-2">{{v.data}}</span>
+                  <span class="badge badge-primary">{{ v.node }}</span>
+                  <span class="pl-2">{{ v.data }}</span>
                 </div>
               </div>
             </div>
@@ -69,7 +69,7 @@
         <p class="leading-10 pb-2">远程节点</p>
         <div class="grid grid-cols-4 gap-4" ref="remoteRef">
           <div v-for="(n, i) in nodes" :key="i">
-            <video :id="i" class="rounded-xl shadow-xl"></video>
+            <video :id="n.nodeID" class="rounded-xl shadow-xl"></video>
             <p class="leding-10 pt-4">
               节点<span class="badge ml-2">{{ n.nodeID }}</span>
             </p>
@@ -80,49 +80,169 @@
   </div>
 </template>
 <script lang="ts" setup>
-import { ref, Ref, onMounted, watch } from 'vue'
+import { ref, Ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import axios from 'axios'
 import { Client, LocalStream } from '../sdk'
 import { IonSFUJSONRPCSignal } from '../sdk/signal/json-rpc'
-import { wsURL } from '../config'
+import { wsURL, baseURL } from '../config'
 const route = useRoute()
 const localRef = ref()
 const remoteRef = ref()
 const isVideoEnabled = ref(true)
 const isAudioEnabled = ref(true)
 const broadcastMsg = ref('')
-const incomeMsgs:Ref<Array<Record<string, string>>> = ref([])
+const incomeMsgs: Ref<Array<Record<string, string>>> = ref([])
 const datachannelMsg = ref('')
-const incomeDatas:Ref<Array<Record<string, string>>> = ref([])
+const incomeDatas: Ref<Array<Record<string, string>>> = ref([])
 
 let nodes: Ref<Record<string, Record<string, any>>> = ref({})
+let streams: Record<string, any> = {}
 let roomID = route.query.id!.toString()
 let nodeID = route.query.node!.toString()
 
-const signalLocal = new IonSFUJSONRPCSignal(`${wsURL}/meeting`)
-const clientLocal = new Client(signalLocal)
-let localDataChannel: RTCDataChannel
-signalLocal.onopen = () => {
-  clientLocal.join(roomID, nodeID)
-  localDataChannel = clientLocal.createDataChannel(`${nodeID}-data`)
+let signalLocal: IonSFUJSONRPCSignal
+let clientLocal: Client
+
+onUnmounted(() => {
+  clientLocal.close()
+})
+const mc = new WebSocket(`${wsURL}/message?room=${roomID}&node=${nodeID}`)
+mc.onopen = () => {
+  console.log('mc opend')
+  signalLocal = new IonSFUJSONRPCSignal(`${wsURL}/meeting`)
+  clientLocal = new Client(signalLocal)
+  let localDataChannel: RTCDataChannel
+  signalLocal.onopen = () => {
+    clientLocal.join(roomID, nodeID)
+    localDataChannel = clientLocal.createDataChannel(`${nodeID}-data`)
+  }
+  clientLocal.ontrack = async (track, stream) => {
+    console.log('got track', track.id, 'for stream', stream.id)
+    const id = stream.id
+    const nodeID = streams[id]
+    // mc.send(JSON.stringify({"event": 'publish'}))
+    // let ret = await axios.get(`${baseURL}/room/${roomID}`)
+    // if (ret.status === 200) {
+    //   console.log('data', ret.data)
+    //   // rooms.value = body.data
+    // }
+    // mc.send(JSON.stringify({"event":"nodes"}))
+    // let remotes: Record<string, any> = await signalLocal.call('remotes', null)
+    // console.log('remotes', remotes)
+    let el: HTMLVideoElement | null = document.getElementById(
+      nodeID
+    ) as HTMLVideoElement
+    if (el !== null) {
+      el.srcObject = stream
+      el.autoplay = true
+      el.controls = true
+      track.onunmute = (evt) => {
+        console.log('onunmute evt', evt)
+        el!.muted = false
+        el!.play()
+      }
+      track.onmute = (evt) => {
+        console.log('onmute evt', evt)
+        el!.muted = true
+        el!.pause()
+      }
+      stream.onremovetrack = () => {
+        try {
+          // console.log('remove track', nodeID, id)
+          if (nodes.value[nodeID]) {
+            delete nodes.value[nodeID]
+          }
+          if (streams[id]) {
+            delete streams[id]
+          }
+        } catch (err) { }
+      }
+    }
+  }
+
+  const sendDataChannel = () => {
+    localDataChannel.send(JSON.stringify({
+      type: 'text',
+      node: nodeID,
+      data: datachannelMsg.value
+    }))
+  }
+
+  clientLocal.ondatachannel = (evt) => {
+    let receiveChannel = evt.channel
+    // console.log('receive datachannel', receiveChannel)
+    receiveChannel.onmessage = (evt) => {
+      let msg = JSON.parse(evt.data)
+      incomeDatas.value.push({
+        node: msg.node,
+        data: msg.data
+      })
+    }
+    receiveChannel.onopen = (evt) => {
+      // console.log('receive channel state', receiveChannel.readyState)
+    }
+    receiveChannel.onclose = (evt) => {
+      console.log('receive channel state', receiveChannel.readyState)
+    }
+  }
 }
-signalLocal.on_notify('connected', (params: any) => {
-  console.log('connected params', params)
-})
-signalLocal.on_notify('join', (params: any) => {
-  console.log('join params', params)
-})
-signalLocal.on_notify('broadcast', (params: Record<string, any>) => {
-  incomeMsgs.value.push({
-    node: params.node,
-    data: params.message.data
-  })
-})
+mc.onclose = () => {
+  console.log('mc closed')
+}
+mc.onerror = (evt: any) => {
+  console.error('mc error', evt.data)
+}
+mc.onmessage = async (evt: MessageEvent) => {
+  const msg = JSON.parse(evt.data)
+  if (!msg) {
+    console.log('message parse failed')
+    return
+  }
+  switch (msg.event) {
+    case 'connected':
+      console.log('connected', msg.data)
+      for (let node of msg.data.nodes) {
+        nodes.value[node.id] = { nodeID: node.id }
+        streams[node.streamID] = node.id
+      }
+      return
+    case 'join':
+      console.log('join', msg.data)
+      nodes.value[msg.data.node] = { nodeID: msg.data.node }
+      return
+    case 'leave':
+      console.log('leave', msg.data)
+      let leftNode = msg.data.node
+      if (nodes.value[leftNode]) {
+        delete nodes.value[leftNode]
+      }
+      return
+    case 'publish':
+      console.log('publish', msg.data, streams)
+      let publishNode = msg.data.node
+      let streamID = msg.data.stream
+      streams[streamID] = publishNode
+      return
+  }
+}
+// signalLocal.on_notify('connected', (params: any) => {
+//   console.log('connected params', params)
+// })
+// signalLocal.on_notify('join', (params: any) => {
+//   console.log('join params', params)
+// })
+// signalLocal.on_notify('broadcast', (params: Record<string, any>) => {
+//   incomeMsgs.value.push({
+//     node: params.node,
+//     data: params.message.data
+//   })
+// })
 const broadcast = () => {
-  signalLocal.notify('broadcast', {
-    type: 'test',
-    data: broadcastMsg.value,
-  })
+  // signalLocal.notify('broadcast', {
+  //   type: 'test',
+  //   data: broadcastMsg.value,
+  // })
 }
 
 let localStream: LocalStream
@@ -139,7 +259,7 @@ const start = async () => {
   localRef.value.id = media.id
   localRef.value.muted = true
   clientLocal.publish(media)
-  signalLocal.call('publish', { mid: media.id })
+  // signalLocal.call('publish', { mid: media.id })
 }
 watch(isVideoEnabled, (isChecked: boolean) => {
   if (isChecked) {
@@ -155,64 +275,4 @@ watch(isAudioEnabled, (isChecked: boolean) => {
     localStream.mute('audio')
   }
 })
-
-clientLocal.ontrack = async (track, stream) => {
-  console.log('got track', track.id, 'for stream', stream.id)
-  const id = stream.id
-  let remotes: Record<string, any> = await signalLocal.call('remotes', null)
-  if (!nodes.value[id]) {
-    nodes.value[id] = { nodeID: remotes[id], streamID: id }
-  }
-  let el: HTMLVideoElement | null = document.getElementById(
-    id
-  ) as HTMLVideoElement
-  if (el !== null) {
-    el.srcObject = stream
-    el.autoplay = true
-    el.controls = true
-  }
-  track.onunmute = (evt) => {
-    console.log('onunmute evt', evt)
-    el!.muted = false
-    el!.play()
-  }
-  track.onmute = (evt) => {
-    console.log('onmute evt', evt)
-    el!.muted = true
-    el!.pause()
-  }
-  stream.onremovetrack = () => {
-    try {
-      if (nodes.value[id]) {
-        delete nodes.value[id]
-      }
-    } catch (err) { }
-  }
-}
-
-const sendDataChannel = () => {
-  localDataChannel.send(JSON.stringify({
-    type: 'text',
-    node: nodeID,
-    data: datachannelMsg.value
-  }))
-}
-
-clientLocal.ondatachannel = (evt) => {
-  let receiveChannel = evt.channel
-  console.log('receive datachannel', receiveChannel)
-  receiveChannel.onmessage = (evt) => {
-      let msg = JSON.parse(evt.data)
-      incomeDatas.value.push({
-        node: msg.node,
-        data: msg.data
-      })
-  }
-  receiveChannel.onopen = (evt) => {
-    console.log('receive channel state', receiveChannel.readyState)
-  }
-  receiveChannel.onclose = (evt) => {
-    console.log('receive channel state', receiveChannel.readyState)
-  }
-}
 </script>
