@@ -1,7 +1,7 @@
 <template>
   <div class="container">
     <h5 class="text-lg text-gray-600 py-4">
-      当前房间<span class="ml-4 badge badge-primary">{{ roomID }}</span>
+      当前房间<span class="ml-4 badge badge-secondary">{{ roomID }}</span>
     </h5>
     <div>
       <div class="px-2 flex">
@@ -12,7 +12,7 @@
             节点 <span class="badge">{{ nodeID }}</span>
           </p>
           <div class="flex items-center">
-            <button class="btn btn-sm btn-primary text-sm" @click="start">
+            <button class="btn btn-sm btn-secondary text-sm" @click="start">
               发布
             </button>
             <div class="form-control pl-4">
@@ -34,7 +34,7 @@
             <div class="h-60 overflow-y-auto bg-slate-100 rounded-xl mb-4">
               <div class="px-4 pt-2" v-for="(v, i) in incomeMsgs" :key="i">
                 <div>
-                  <span class="badge badge-primary">{{ v.node }}</span>
+                  <span class="badge badge-secondary">{{ v.node }}</span>
                   <span class="pl-2">{{ v.data }}</span>
                 </div>
               </div>
@@ -42,7 +42,7 @@
             <div class="form-control">
               <div class="input-group input-group-sm">
                 <input type="text" placeholder="广播消息" class="input input-bordered" v-model="broadcastMsg" />
-                <span class="cursor-pointer" @click="broadcast">发送</span>
+                <span class="cursor-pointer" @click="broadcast">发送消息</span>
               </div>
             </div>
           </div>
@@ -50,7 +50,7 @@
             <div class="h-60 overflow-y-auto bg-slate-100 rounded-xl mb-4">
               <div class="px-4 pt-2" v-for="(v, i) in incomeDatas" :key="i">
                 <div>
-                  <span class="badge badge-primary">{{ v.node }}</span>
+                  <span class="badge badge-secondary">{{ v.node }}</span>
                   <span class="pl-2">{{ v.data }}</span>
                 </div>
               </div>
@@ -58,7 +58,7 @@
             <div class="form-control">
               <div class="input-group input-group-sm">
                 <input type="text" placeholder="数据频道消息" class="input input-bordered" v-model="datachannelMsg" />
-                <span class="cursor-pointer" @click="sendDataChannel">发送</span>
+                <span class="cursor-pointer" @click="sendDataChannel">发送数据</span>
               </div>
             </div>
           </div>
@@ -77,15 +77,19 @@
         </div>
       </div>
     </div>
+    <Toast ref="toastRef" />
   </div>
 </template>
 <script lang="ts" setup>
 import { ref, Ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
+import Toast from '@/components/Toast.vue'
 import { Client, LocalStream } from '../sdk'
 import { IonSFUJSONRPCSignal } from '../sdk/signal/json-rpc'
 import { wsURL, baseURL } from '../config'
+
+const toastRef = ref<InstanceType<typeof Toast>>()
 const route = useRoute()
 const localRef = ref()
 const remoteRef = ref()
@@ -103,6 +107,29 @@ let nodeID = route.query.node!.toString()
 
 let signalLocal: IonSFUJSONRPCSignal
 let clientLocal: Client
+let localDC: RTCDataChannel
+
+
+const sendDataChannel = () => {
+  localDC.send(JSON.stringify({
+    type: 'text',
+    node: nodeID,
+    data: datachannelMsg.value
+  }))
+  toastRef.value?.show("发布数据广播成功", () => {
+    datachannelMsg.value = ''
+  })
+}
+
+const broadcast = () => {
+  mc.send(JSON.stringify({
+    "event": "broadcast",
+    "data": broadcastMsg.value
+  }))
+  toastRef.value?.show("发布消息广播成功", () => {
+    broadcastMsg.value = ''
+  })
+}
 
 onUnmounted(() => {
   clientLocal.close()
@@ -112,10 +139,9 @@ mc.onopen = () => {
   console.log('mc opend')
   signalLocal = new IonSFUJSONRPCSignal(`${wsURL}/meeting`)
   clientLocal = new Client(signalLocal)
-  let localDataChannel: RTCDataChannel
   signalLocal.onopen = () => {
     clientLocal.join(roomID, nodeID)
-    localDataChannel = clientLocal.createDataChannel(`${nodeID}-data`)
+    localDC = clientLocal.createDataChannel(`${nodeID}-dc`)
   }
   clientLocal.ontrack = async (track, stream) => {
     console.log('got track', track.id, 'for stream', stream.id)
@@ -161,18 +187,12 @@ mc.onopen = () => {
     }
   }
 
-  const sendDataChannel = () => {
-    localDataChannel.send(JSON.stringify({
-      type: 'text',
-      node: nodeID,
-      data: datachannelMsg.value
-    }))
-  }
 
   clientLocal.ondatachannel = (evt) => {
     let receiveChannel = evt.channel
-    // console.log('receive datachannel', receiveChannel)
+    console.log('receive datachannel', receiveChannel)
     receiveChannel.onmessage = (evt) => {
+      console.log('receive dc message', evt.data)
       let msg = JSON.parse(evt.data)
       incomeDatas.value.push({
         node: msg.node,
@@ -180,10 +200,10 @@ mc.onopen = () => {
       })
     }
     receiveChannel.onopen = (evt) => {
-      // console.log('receive channel state', receiveChannel.readyState)
+      console.log('receive channel open', receiveChannel.readyState)
     }
     receiveChannel.onclose = (evt) => {
-      console.log('receive channel state', receiveChannel.readyState)
+      console.log('receive channel close', receiveChannel.readyState)
     }
   }
 }
@@ -224,25 +244,13 @@ mc.onmessage = async (evt: MessageEvent) => {
       let streamID = msg.data.stream
       streams[streamID] = publishNode
       return
+    case 'broadcast':
+      console.log('broadcast', msg.data)
+      incomeMsgs.value.push({
+        node: msg.from,
+        data: msg.data
+      })
   }
-}
-// signalLocal.on_notify('connected', (params: any) => {
-//   console.log('connected params', params)
-// })
-// signalLocal.on_notify('join', (params: any) => {
-//   console.log('join params', params)
-// })
-// signalLocal.on_notify('broadcast', (params: Record<string, any>) => {
-//   incomeMsgs.value.push({
-//     node: params.node,
-//     data: params.message.data
-//   })
-// })
-const broadcast = () => {
-  // signalLocal.notify('broadcast', {
-  //   type: 'test',
-  //   data: broadcastMsg.value,
-  // })
 }
 
 let localStream: LocalStream

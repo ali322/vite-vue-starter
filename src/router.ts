@@ -6,6 +6,7 @@ const router = createRouter({
   routes: [
     { path: '/', name: 'home', component: HomeView },
     { path: '/meeting', name: 'meeting', component: () => import('@/views/Meeting.vue') },
+    { path: '/relay', name: 'relay', component: () => import('@/views/Relay.vue') },
     {
       path: '/login',
       name: 'login',

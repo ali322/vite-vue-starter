@@ -5,7 +5,7 @@ import { RouterView, RouterLink } from 'vue-router'
 <template>
   <div class="navbar bg-gray-800 text-white">
     <div class="flex-1">
-      <span class="btn btn-ghost normal-case text-xl">Starter</span>
+      <span class="btn btn-ghost normal-case text-xl">Wion App</span>
     </div>
     <div class="flex-none">
       <ul class="menu menu-horizontal p-0">
