@@ -81,7 +81,7 @@
   </div>
 </template>
 <script lang="ts" setup>
-import { ref, onMounted, onUnmounted, Ref, watch } from 'vue'
+import { ref, onUnmounted, Ref, watch } from 'vue'
 import Toast from '../components/Toast.vue'
 import { useRoute } from 'vue-router'
 import { relayURL, wsURL } from '../config'
@@ -162,123 +162,89 @@ const publish = async () => {
   })
 }
 
-onMounted(async () => {
-  let config: RTCConfiguration = {
-    iceServers: [
-      {
-        urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'],
-      },
-    ],
-  }
-  pc = new RTCPeerConnection(config)
-  // pc.createDataChannel("ion-sfu")
-  localDC = pc.createDataChannel(`${nodeID}-dc`)
+let config: RTCConfiguration = {
+  iceServers: [
+    {
+      urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'],
+    },
+  ],
+}
+mc = new WebSocket(`${wsURL}/message?room=${roomID}&node=${nodeID}`)
+mc.onopen = () => {
   ws = new WebSocket(`${relayURL}/relay?room=${roomID}&node=${nodeID}`)
-
-  mc = new WebSocket(`${wsURL}/message?room=${roomID}&node=${nodeID}`)
-  mc.onopen = () => {
-    console.log('mc opend')
-  }
-  mc.onclose = () => {
-    console.log('mc closed')
-  }
-  mc.onerror = (evt: any) => {
-    console.error('mc error', evt.data)
-  }
-  mc.onmessage = async (evt: MessageEvent) => {
-    const msg = JSON.parse(evt.data)
-    if (!msg) {
-      console.log('message parse failed')
-      return
-    }
-    switch (msg.event) {
-      case 'connected':
-        console.log('connected', msg.data)
-        for (let node of msg.data.nodes) {
-          nodes.value[node.id] = { nodeID: node.id }
-          streams[node.streamID] = node.id
-        }
-        return
-      case 'join':
-        console.log('join', msg.data)
-        nodes.value[msg.data.node] = { nodeID: msg.data.node }
-        return
-      case 'leave':
-        console.log('leave', msg.data)
-        let leftNode = msg.data.node
-        if (nodes.value[leftNode]) {
-          delete nodes.value[leftNode]
-        }
-        return
-      case 'publish':
-        console.log('publish', msg.data, streams)
-        let publishNode = msg.data.node
-        let streamID = msg.data.stream
-        streams[streamID] = publishNode
-        return
-      case 'broadcast':
-        console.log('broadcast', msg.data)
-        incomeMsgs.value.push({
-          node: msg.from,
-          data: msg.data
-        })
-    }
-  }
-
-  let stats = await pc.getStats()
-  // console.log('stats', pc)
-  pc.ontrack = (evt) => {
-    console.log('evt', evt)
-    const id = evt.streams[0].id
-    const nodeID = streams[id]
-    let el: HTMLVideoElement | null = document.getElementById(
-      nodeID
-    ) as HTMLVideoElement
-    if (el !== null) {
-      el.srcObject = evt.streams[0]
-      el.autoplay = true
-      el.controls = true
-      evt.track.onunmute = (evt) => {
-        console.log('onunmute evt', evt)
-        el!.muted = false
-        el!.play()
-      }
-      evt.track.onmute = (evt) => {
-        console.log('onmute evt', evt)
-        el!.muted = true
-        el!.pause()
-      }
-      evt.streams[0].onremovetrack = () => {
-        try {
-          if (streams[id]) {
-            delete streams[id]
-          }
-        } catch (err) { }
-      }
-    }
-  }
-  pc.onnegotiationneeded = async (evt) => {
-    const offer = await pc.createOffer({ iceRestart: false })
-    await pc.setLocalDescription(offer)
-    ws.send(JSON.stringify({ method: 'offer', params: JSON.stringify(offer) }))
-  }
-  pc.onicecandidate = (evt) => {
-    if (evt.candidate) {
-      ws.send(JSON.stringify({ method: 'candidate', params: JSON.stringify(evt.candidate) }))
-    }
-  }
-  pc.onconnectionstatechange = (evt) => {
-    if (pc.connectionState == 'connected') {
-      console.log('connected')
-    }
-    if (pc.connectionState == 'disconnected' || pc.connectionState == 'failed') {
-      pc.restartIce()
-    }
-  }
   ws.onopen = async () => {
+    pc = new RTCPeerConnection(config)
+    localDC = pc.createDataChannel(`${nodeID}-dc`)
     const d = await pc.createOffer()
     pc.setLocalDescription(d)
     ws.send(JSON.stringify({ method: 'offer', params: JSON.stringify(d) }))
+    console.log('mc opend')
+    pc.ontrack = (evt) => {
+      console.log('evt', evt)
+      const id = evt.streams[0].id
+      const nodeID = streams[id]
+      let el: HTMLVideoElement | null = document.getElementById(
+        nodeID
+      ) as HTMLVideoElement
+      if (el !== null) {
+        el.srcObject = evt.streams[0]
+        el.autoplay = true
+        el.controls = true
+        evt.track.onunmute = (evt) => {
+          console.log('onunmute evt', evt)
+          el!.muted = false
+          el!.play()
+        }
+        evt.track.onmute = (evt) => {
+          console.log('onmute evt', evt)
+          el!.muted = true
+          el!.pause()
+        }
+        evt.streams[0].onremovetrack = () => {
+          try {
+            if (streams[id]) {
+              delete streams[id]
+            }
+          } catch (err) { }
+        }
+      }
+      pc.ondatachannel = (evt) => {
+        let receiveChannel = evt.channel
+        console.log('receive datachannel', receiveChannel)
+        receiveChannel.onmessage = (evt) => {
+          console.log('receive dc message', evt.data)
+          let msg = JSON.parse(evt.data)
+          incomeDatas.value.push({
+            node: msg.node,
+            data: msg.data
+          })
+        }
+        receiveChannel.onopen = (evt) => {
+          console.log('receive channel open', receiveChannel.readyState)
+        }
+        receiveChannel.onclose = (evt) => {
+          console.log('receive channel close', receiveChannel.readyState)
+        }
+      }
+    }
+    pc.onnegotiationneeded = async (evt) => {
+      const offer = await pc.createOffer({ iceRestart: false })
+      await pc.setLocalDescription(offer)
+      ws.send(JSON.stringify({ method: 'offer', params: JSON.stringify(offer) }))
+    }
+    pc.onicecandidate = (evt) => {
+      if (evt.candidate) {
+        ws.send(JSON.stringify({ method: 'candidate', params: JSON.stringify(evt.candidate) }))
+      }
+    }
+    pc.onconnectionstatechange = (evt) => {
+      if (pc.connectionState == 'connected') {
+        console.log('connected')
+      }
+      if (pc.connectionState == 'disconnected' || pc.connectionState == 'failed') {
+        pc.restartIce()
+      }
+    }
   }
   ws.onclose = () => {
     toastRef.value?.show('ws is closed')
@@ -324,23 +290,51 @@ onMounted(async () => {
     }
   }
 
-  pc.ondatachannel = (evt) => {
-    let receiveChannel = evt.channel
-    console.log('receive datachannel', receiveChannel)
-    receiveChannel.onmessage = (evt) => {
-      console.log('receive dc message', evt.data)
-      let msg = JSON.parse(evt.data)
-      incomeDatas.value.push({
-        node: msg.node,
+
+}
+mc.onclose = () => {
+  console.log('mc closed')
+}
+mc.onerror = (evt: any) => {
+  console.error('mc error', evt.data)
+}
+mc.onmessage = async (evt: MessageEvent) => {
+  const msg = JSON.parse(evt.data)
+  if (!msg) {
+    console.log('message parse failed')
+    return
+  }
+  switch (msg.event) {
+    case 'connected':
+      console.log('connected', msg.data)
+      for (let node of msg.data.nodes) {
+        nodes.value[node.id] = { nodeID: node.id }
+        streams[node.streamID] = node.id
+      }
+      return
+    case 'join':
+      console.log('join', msg.data)
+      nodes.value[msg.data.node] = { nodeID: msg.data.node }
+      return
+    case 'leave':
+      console.log('leave', msg.data)
+      let leftNode = msg.data.node
+      if (nodes.value[leftNode]) {
+        delete nodes.value[leftNode]
+      }
+      return
+    case 'publish':
+      console.log('publish', msg.data, streams)
+      let publishNode = msg.data.node
+      let streamID = msg.data.stream
+      streams[streamID] = publishNode
+      return
+    case 'broadcast':
+      console.log('broadcast', msg.data)
+      incomeMsgs.value.push({
+        node: msg.from,
         data: msg.data
       })
-    }
-    receiveChannel.onopen = (evt) => {
-      console.log('receive channel open', receiveChannel.readyState)
-    }
-    receiveChannel.onclose = (evt) => {
-      console.log('receive channel close', receiveChannel.readyState)
-    }
   }
-})
+}
 </script>

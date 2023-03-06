@@ -81,7 +81,7 @@
   </div>
 </template>
 <script lang="ts" setup>
-import { ref, Ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, Ref, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
 import Toast from '@/components/Toast.vue'
