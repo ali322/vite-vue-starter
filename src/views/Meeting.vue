@@ -8,31 +8,35 @@
         <div class="w-72">
           <p class="pl-2 leading-10">本地节点</p>
           <video class="h-40 m-0 rounded-xl shadow-xl" autoplay ref="localRef"></video>
-          <p class="leading-10 py-4">
-            节点 <span class="badge">{{ nodeID }}</span>
-          </p>
           <div class="flex items-center">
-            <button class="btn btn-sm btn-secondary text-sm" @click="start">
-              发布
-            </button>
-            <div class="form-control pl-4">
+            <p class="leading-10 py-4 flex-1">
+              节点 <span class="badge">{{ nodeID }}</span>
+            </p>
+            <div class="form-control">
               <label class="label cursor-pointer">
-                <span class="label-text pr-2">视频</span>
+                <span class="label-text pr-2 text-xs">视频</span>
                 <input type="checkbox" class="toggle toggle-sm" v-model="isVideoEnabled" />
               </label>
             </div>
-            <div class="form-control pl-4">
+            <div class="form-control">
               <label class="label cursor-pointer">
-                <span class="label-text pr-2">音频</span>
+                <span class="label-text pr-2 text-xs">音频</span>
                 <input type="checkbox" class="toggle toggle-sm" v-model="isAudioEnabled" />
               </label>
             </div>
           </div>
+          <div class="flex items-center">
+            <button class="btn btn-sm btn-secondary text-sm" @click="start">
+              发布
+            </button>
+            <button class="btn btn-sm btn-primary text-sm ml-4" @click="record"
+              :class="{ 'btn-accent': isRecord }">{{ isRecord?'停止': '录制' }}</button>
+          </div>
         </div>
         <div class="flex-1 flex">
-          <div class="px-8 flex flex-col">
+          <div class="pl-8 flex flex-col">
             <div class="h-60 overflow-y-auto bg-slate-100 rounded-xl mb-4">
-              <div class="px-4 pt-2" v-for="(v, i) in incomeMsgs" :key="i">
+              <div class="px-4 pt-2" v-for="(v, i) in incomeMsg" :key="i">
                 <div>
                   <span class="badge badge-secondary">{{ v.node }}</span>
                   <span class="pl-2">{{ v.data }}</span>
@@ -42,13 +46,13 @@
             <div class="form-control">
               <div class="input-group input-group-sm">
                 <input type="text" placeholder="广播消息" class="input input-bordered" v-model="broadcastMsg" />
-                <span class="cursor-pointer" @click="broadcast">发送消息</span>
+                <span class="cursor-pointer text-sm" @click="broadcast">发消息</span>
               </div>
             </div>
           </div>
-          <div class="px-8 flex flex-col">
+          <div class="pl-8 flex flex-col">
             <div class="h-60 overflow-y-auto bg-slate-100 rounded-xl mb-4">
-              <div class="px-4 pt-2" v-for="(v, i) in incomeDatas" :key="i">
+              <div class="px-4 pt-2" v-for="(v, i) in incomeData" :key="i">
                 <div>
                   <span class="badge badge-secondary">{{ v.node }}</span>
                   <span class="pl-2">{{ v.data }}</span>
@@ -58,7 +62,18 @@
             <div class="form-control">
               <div class="input-group input-group-sm">
                 <input type="text" placeholder="数据频道消息" class="input input-bordered" v-model="datachannelMsg" />
-                <span class="cursor-pointer" @click="sendDataChannel">发送数据</span>
+                <span class="cursor-pointer text-sm" @click="sendDataChannel">发数据</span>
+              </div>
+            </div>
+          </div>
+          <div class="pl-4 flex flex-col">
+            <div class="h-80 overflow-y-auto mb-4">
+              <div class="px-4 pt-2" v-for="(v, i) in records" :key="i">
+                <div>
+                  <span class="badge badge-secondary">{{ v.filename }}</span>
+                    <p class="pl-2 text-xs">开始录制: {{ v.startedAt }}</p>
+                    <p class="pl-2 text-xs">结束录制: {{ v.finishedAt }}</p>
+                </div>
               </div>
             </div>
           </div>
@@ -87,7 +102,7 @@ import axios from 'axios'
 import Toast from '@/components/Toast.vue'
 import { Client, LocalStream } from '../sdk'
 import { IonSFUJSONRPCSignal } from '../sdk/signal/json-rpc'
-import { wsURL, baseURL } from '../config'
+import { wsURL, baseURL, relayURL } from '../config'
 
 const toastRef = ref<InstanceType<typeof Toast>>()
 const route = useRoute()
@@ -95,10 +110,12 @@ const localRef = ref()
 const remoteRef = ref()
 const isVideoEnabled = ref(true)
 const isAudioEnabled = ref(true)
+const isRecord = ref(false)
 const broadcastMsg = ref('')
-const incomeMsgs: Ref<Array<Record<string, string>>> = ref([])
+const incomeMsg: Ref<Array<Record<string, string>>> = ref([])
 const datachannelMsg = ref('')
-const incomeDatas: Ref<Array<Record<string, string>>> = ref([])
+const incomeData: Ref<Array<Record<string, string>>> = ref([])
+const records: Ref<Array<Record<string, any>>> = ref([])
 
 let nodes: Ref<Record<string, Record<string, any>>> = ref({})
 let streams: Record<string, any> = {}
@@ -108,7 +125,6 @@ let nodeID = route.query.node!.toString()
 let signalLocal: IonSFUJSONRPCSignal
 let clientLocal: Client
 let localDC: RTCDataChannel
-
 
 const sendDataChannel = () => {
   localDC.send(JSON.stringify({
@@ -129,6 +145,33 @@ const broadcast = () => {
   toastRef.value?.show("发布消息广播成功", () => {
     broadcastMsg.value = ''
   })
+}
+
+let recordSig: WebSocket = new WebSocket(`${relayURL}/record?room=${roomID}&node=${nodeID}`)
+recordSig.onmessage = (evt: MessageEvent) => {
+  const msg = JSON.parse(evt.data)
+  if (!msg) {
+    console.log('message parse failed')
+    return
+  }
+  switch(msg.event) {
+    case 'record_stoped':
+      console.log('record stoped', msg.data)
+      records.value.push(msg.data)
+  }
+}
+
+const record = () => {
+  if (recordSig.readyState !== WebSocket.OPEN) {
+    toastRef.value?.error('记录信令未开启')
+    return
+  }
+  if (isRecord.value) {
+    recordSig.send(JSON.stringify({ 'event': 'stop_record' }))
+  } else {
+    recordSig.send(JSON.stringify({ 'event': 'record' }))
+  }
+  isRecord.value = !isRecord.value
 }
 
 onUnmounted(() => {
@@ -194,7 +237,7 @@ mc.onopen = () => {
     receiveChannel.onmessage = (evt) => {
       console.log('receive dc message', evt.data)
       let msg = JSON.parse(evt.data)
-      incomeDatas.value.push({
+      incomeData.value.push({
         node: msg.node,
         data: msg.data
       })
@@ -246,7 +289,7 @@ mc.onmessage = async (evt: MessageEvent) => {
       return
     case 'broadcast':
       console.log('broadcast', msg.data)
-      incomeMsgs.value.push({
+      incomeMsg.value.push({
         node: msg.from,
         data: msg.data
       })

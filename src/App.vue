@@ -1,7 +1,3 @@
-<script setup lang="ts">
-import { RouterView, RouterLink } from 'vue-router'
-</script>
-
 <template>
   <div class="navbar bg-gray-800 text-white">
     <div class="flex-1">
@@ -9,8 +5,10 @@ import { RouterView, RouterLink } from 'vue-router'
     </div>
     <div class="flex-none">
       <ul class="menu menu-horizontal p-0">
+        <li v-if="userStore.isLogin"><span>hi, {{ userStore.id }}</span></li>
         <li><RouterLink to="/">Home</RouterLink></li>
-        <li><RouterLink to="/login">Login</RouterLink></li>
+        <li v-if="!userStore.isLogin"><span @click="doLogin">Login</span></li>
+        <li v-else><span @click="doLogout">Logout</span></li>
       </ul>
     </div>
   </div>
@@ -18,3 +16,23 @@ import { RouterView, RouterLink } from 'vue-router'
     <RouterView/>
   </div>
 </template>
+<script setup lang="ts">
+import { RouterView, RouterLink } from 'vue-router'
+import useUserStore from '@/store/user'
+import { generateUUID } from '@/util/index'
+
+const userStore = useUserStore()
+
+const doLogin = () => {
+  const id = generateUUID()
+  userStore.$patch({
+    id: id,
+    username: 'guest',
+    isLogin: true
+  })
+}
+
+const doLogout = () => {
+  userStore.$reset()
+}
+</script>

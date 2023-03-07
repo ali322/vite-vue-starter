@@ -8,31 +8,34 @@
         <div class="w-72">
           <p class="pl-2 leading-10">本地节点</p>
           <video class="h-40 m-0 rounded-xl shadow-xl" autoplay ref="localRef"></video>
-          <p class="leading-10 py-4">
-            节点 <span class="badge">{{ nodeID }}</span>
-          </p>
+           <div class="flex items-center">
+            <p class="leading-10 py-4 flex-1">
+              节点 <span class="badge">{{ nodeID }}</span>
+            </p>
+            <div class="form-control">
+              <label class="label cursor-pointer">
+                <span class="label-text pr-2 text-xs">视频</span>
+                <input type="checkbox" class="toggle toggle-sm" v-model="isVideoEnabled" />
+              </label>
+            </div>
+            <div class="form-control">
+              <label class="label cursor-pointer">
+                <span class="label-text pr-2 text-xs">音频</span>
+                <input type="checkbox" class="toggle toggle-sm" v-model="isAudioEnabled" />
+              </label>
+            </div>
+          </div>
           <div class="flex items-center">
             <button class="btn btn-sm btn-secondary text-sm" @click="publish">
               发布
             </button>
-            <div class="form-control pl-4">
-              <label class="label cursor-pointer">
-                <span class="label-text pr-2">视频</span>
-                <input type="checkbox" class="toggle toggle-sm" v-model="isVideoEnabled" />
-              </label>
-            </div>
-            <div class="form-control pl-4">
-              <label class="label cursor-pointer">
-                <span class="label-text pr-2">音频</span>
-                <input type="checkbox" class="toggle toggle-sm" v-model="isAudioEnabled" />
-              </label>
-            </div>
+            <button class="btn btn-sm btn-primary text-sm ml-4" @click="record" :class="{'btn-accent': isRecord}">{{isRecord?'停止':'录制'}}</button>
           </div>
         </div>
         <div class="flex-1 flex">
           <div class="px-8 flex flex-col">
             <div class="h-60 overflow-y-auto bg-slate-100 rounded-xl mb-4">
-              <div class="px-4 pt-2" v-for="(v, i) in incomeMsgs" :key="i">
+              <div class="px-4 pt-2" v-for="(v, i) in incomeMsg" :key="i">
                 <div>
                   <span class="badge badge-secondary">{{ v.node }}</span>
                   <span class="pl-2">{{ v.data }}</span>
@@ -48,7 +51,7 @@
           </div>
           <div class="px-8 flex flex-col">
             <div class="h-60 overflow-y-auto bg-slate-100 rounded-xl mb-4">
-              <div class="px-4 pt-2" v-for="(v, i) in incomeDatas" :key="i">
+              <div class="px-4 pt-2" v-for="(v, i) in incomeData" :key="i">
                 <div>
                   <span class="badge badge-secondary">{{ v.node }}</span>
                   <span class="pl-2">{{ v.data }}</span>
@@ -95,10 +98,11 @@ let nodes: Ref<Record<string, Record<string, any>>> = ref({})
 let streams: Record<string, any> = {}
 const isVideoEnabled = ref(true)
 const isAudioEnabled = ref(true)
+const isRecord = ref(false)
 const broadcastMsg = ref('')
-const incomeMsgs: Ref<Array<Record<string, string>>> = ref([])
+const incomeMsg: Ref<Array<Record<string, string>>> = ref([])
 const datachannelMsg = ref('')
-const incomeDatas: Ref<Array<Record<string, string>>> = ref([])
+const incomeData: Ref<Array<Record<string, string>>> = ref([])
 
 let roomID = route.query.id!.toString()
 let nodeID = route.query.node!.toString()
@@ -144,6 +148,10 @@ const sendDataChannel = () => {
   })
 }
 
+const record = () => {
+  isRecord.value = !isRecord.value
+}
+
 onUnmounted(() => {
   ws.close()
   pc.close()
@@ -178,7 +186,6 @@ mc.onopen = () => {
     const d = await pc.createOffer()
     pc.setLocalDescription(d)
     ws.send(JSON.stringify({ method: 'offer', params: JSON.stringify(d) }))
-    console.log('mc opend')
     pc.ontrack = (evt) => {
       console.log('evt', evt)
       const id = evt.streams[0].id
@@ -214,7 +221,7 @@ mc.onopen = () => {
         receiveChannel.onmessage = (evt) => {
           console.log('receive dc message', evt.data)
           let msg = JSON.parse(evt.data)
-          incomeDatas.value.push({
+          incomeData.value.push({
             node: msg.node,
             data: msg.data
           })
@@ -331,7 +338,7 @@ mc.onmessage = async (evt: MessageEvent) => {
       return
     case 'broadcast':
       console.log('broadcast', msg.data)
-      incomeMsgs.value.push({
+      incomeMsg.value.push({
         node: msg.from,
         data: msg.data
       })

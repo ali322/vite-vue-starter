@@ -1,6 +1,6 @@
 export function generateUUID() {
   var d = new Date().getTime()
-  var uuid = 'xxxxxxxx'.replace(
+  var uuid = 'xxxx'.replace(
     /[xy]/g,
     function (c) {
       var r = (d + Math.random() * 16) % 16 | 0
