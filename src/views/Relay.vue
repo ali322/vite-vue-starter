@@ -99,10 +99,12 @@ let streams: Record<string, any> = {}
 const isVideoEnabled = ref(true)
 const isAudioEnabled = ref(true)
 const isRecord = ref(false)
+const focus = ref('')
 const broadcastMsg = ref('')
 const incomeMsg: Ref<Array<Record<string, string>>> = ref([])
 const datachannelMsg = ref('')
 const incomeData: Ref<Array<Record<string, string>>> = ref([])
+const records: Ref<Array<Record<string, any>>> = ref([])
 
 let roomID = route.query.id!.toString()
 let nodeID = route.query.node!.toString()
@@ -148,8 +150,34 @@ const sendDataChannel = () => {
   })
 }
 
+let recordSig: WebSocket = new WebSocket(`${relayURL}/record?room=${roomID}&node=${nodeID}`)
+recordSig.onmessage = (evt: MessageEvent) => {
+  const msg = JSON.parse(evt.data)
+  if (!msg) {
+    console.log('message parse failed')
+    return
+  }
+  switch(msg.event) {
+    case 'record_stoped':
+      console.log('record stoped', msg.data)
+      records.value.push(msg.data)
+  }
+}
 const record = () => {
+  if (recordSig.readyState !== WebSocket.OPEN) {
+    toastRef.value?.error('记录信令未开启')
+    return
+  }
+  if (isRecord.value) {
+    recordSig.send(JSON.stringify({ 'event': 'stop_record' }))
+  } else {
+    recordSig.send(JSON.stringify({ 'event': 'record' }))
+  }
   isRecord.value = !isRecord.value
+}
+
+const setFocus = () => {
+  ws.send(JSON.stringify({ method: 'switch', params: focus.value }))
 }
 
 onUnmounted(() => {
@@ -179,7 +207,7 @@ let config: RTCConfiguration = {
 }
 mc = new WebSocket(`${wsURL}/message?room=${roomID}&node=${nodeID}`)
 mc.onopen = () => {
-  ws = new WebSocket(`${relayURL}/relay?room=${roomID}&node=${nodeID}`)
+  ws = new WebSocket(`${relayURL}/p2p?room=${roomID}&node=${nodeID}`)
   ws.onopen = async () => {
     pc = new RTCPeerConnection(config)
     localDC = pc.createDataChannel(`${nodeID}-dc`)
