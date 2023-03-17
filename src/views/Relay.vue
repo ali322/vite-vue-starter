@@ -33,7 +33,7 @@
           </div>
         </div>
         <div class="flex-1 flex">
-          <div class="px-8 flex flex-col">
+          <div class="pl-4 flex flex-col">
             <div class="h-60 overflow-y-auto bg-slate-100 rounded-xl mb-4">
               <div class="px-4 pt-2" v-for="(v, i) in incomeMsg" :key="i">
                 <div>
@@ -49,7 +49,7 @@
               </div>
             </div>
           </div>
-          <div class="px-8 flex flex-col">
+          <div class="pl-4 flex flex-col">
             <div class="h-60 overflow-y-auto bg-slate-100 rounded-xl mb-4">
               <div class="px-4 pt-2" v-for="(v, i) in incomeData" :key="i">
                 <div>
@@ -65,11 +65,31 @@
               </div>
             </div>
           </div>
+          <div class="pl-4 flex flex-col">
+            <div class="form-control">
+              <div class="input-group input-group-sm">
+                <input type="text" placeholder="流id" class="input input-bordered" v-model="focus" />
+                <span class="cursor-pointer" @click="setFocus">关注</span>
+              </div>
+            </div>
+            <div class="h-80 overflow-y-auto mb-4">
+              <div class="px-4 pt-2" v-for="(v, i) in records" :key="i">
+                <div>
+                  <span class="badge badge-secondary">{{ v.filename }}</span>
+                    <p class="pl-2 text-xs">开始录制: {{ v.startedAt }}</p>
+                    <p class="pl-2 text-xs">结束录制: {{ v.finishedAt }}</p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
       <div class="divider"></div>
       <div class="px-2 pb-4">
-        <p class="leading-10 pb-2">远程节点</p>
+        <div class="flex items-center">
+          <p class="leading-10 pb-2">远程节点</p>
+          <div id="remote-audio"></div>
+        </div>
         <div class="grid grid-cols-4 gap-4" ref="remoteRef">
           <div v-for="(n, i) in nodes" :key="i">
             <video :id="n.nodeID" class="rounded-xl shadow-xl"></video>
@@ -215,6 +235,14 @@ mc.onopen = () => {
     pc.setLocalDescription(d)
     ws.send(JSON.stringify({ method: 'offer', params: JSON.stringify(d) }))
     pc.ontrack = (evt) => {
+      if (evt.track.kind === 'audio') {
+        let el = document.createElement('audio')
+        el.srcObject = evt.streams[0]
+        el.autoplay = true
+        el.controls = true
+        document.getElementById('remote-audio')?.appendChild(el)
+        return
+      }
       console.log('evt', evt)
       const id = evt.streams[0].id
       const nodeID = streams[id]
@@ -274,7 +302,7 @@ mc.onopen = () => {
     }
     pc.onconnectionstatechange = (evt) => {
       if (pc.connectionState == 'connected') {
-        console.log('connected')
+        console.log('peer connection connected')
       }
       if (pc.connectionState == 'disconnected' || pc.connectionState == 'failed') {
         pc.restartIce()
