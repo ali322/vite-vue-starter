@@ -26,7 +26,8 @@ const userStore = useUserStore()
 const doLogin = () => {
   const id = generateUUID()
   userStore.$patch({
-    id: id,
+    // @ts-ignore
+    id,
     username: 'guest',
     isLogin: true
   })

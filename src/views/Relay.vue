@@ -26,9 +26,7 @@
             </div>
           </div>
           <div class="flex items-center">
-            <button class="btn btn-sm btn-secondary text-sm" @click="publish">
-              发布
-            </button>
+            <button class="btn btn-sm btn-secondary text-sm" @click="publish">发布</button>
             <button class="btn btn-sm btn-primary text-sm ml-4" @click="record" :class="{'btn-accent': isRecord}">{{isRecord?'停止':'录制'}}</button>
           </div>
         </div>
@@ -66,12 +64,6 @@
             </div>
           </div>
           <div class="pl-4 flex flex-col">
-            <div class="form-control">
-              <div class="input-group input-group-sm">
-                <input type="text" placeholder="流id" class="input input-bordered" v-model="focus" />
-                <span class="cursor-pointer" @click="setFocus">关注</span>
-              </div>
-            </div>
             <div class="h-80 overflow-y-auto mb-4">
               <div class="px-4 pt-2" v-for="(v, i) in records" :key="i">
                 <div>
@@ -92,10 +84,16 @@
         </div>
         <div class="grid grid-cols-4 gap-4" ref="remoteRef">
           <div v-for="(n, i) in nodes" :key="i">
-            <video :id="n.nodeID" class="rounded-xl shadow-xl"></video>
-            <p class="leding-10 pt-4">
-              节点<span class="badge ml-2">{{ n.nodeID }}</span>
-            </p>
+            <video :id="n.id" class="rounded-xl shadow-xl"></video>
+            <div class="leding-10 pt-4 flex items-center">
+              <p class="flex-1">节点<span class="badge ml-2">{{ n.id }}</span></p>
+              <div class="form-control">
+                <label class="label cursor-pointer">
+                  <span class="label-text pr-2 text-xs">视频</span>
+                  <input type="checkbox" class="toggle toggle-sm" @change="switchNode(n)" v-model="n.isVideoEnabled" />
+                </label>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -107,7 +105,7 @@
 import { ref, onUnmounted, Ref, watch } from 'vue'
 import Toast from '../components/Toast.vue'
 import { useRoute } from 'vue-router'
-import { relayURL, wsURL } from '../config'
+import { relayURL, wsURL } from "../config"
 
 const remoteRef = ref()
 const localRef = ref()
@@ -196,8 +194,14 @@ const record = () => {
   isRecord.value = !isRecord.value
 }
 
-const setFocus = () => {
-  ws.send(JSON.stringify({ method: 'switch', params: focus.value }))
+
+const switchNode = (node: Record<string, any>) => {
+  for(let id in nodes.value) {
+    if (id !== node.id) {
+      nodes.value[id].isVideoEnabled = false
+    }
+  }
+  ws.send(JSON.stringify({ method: 'switch', params: node.streamID }))
 }
 
 onUnmounted(() => {
@@ -266,7 +270,7 @@ mc.onopen = () => {
         evt.streams[0].onremovetrack = () => {
           try {
             if (streams[id]) {
-              delete streams[id]
+              // delete streams[id]
             }
           } catch (err) { }
         }
@@ -282,15 +286,15 @@ mc.onopen = () => {
             data: msg.data
           })
         }
-        receiveChannel.onopen = (evt) => {
+        receiveChannel.onopen = () => {
           console.log('receive channel open', receiveChannel.readyState)
         }
-        receiveChannel.onclose = (evt) => {
+        receiveChannel.onclose = () => {
           console.log('receive channel close', receiveChannel.readyState)
         }
       }
     }
-    pc.onnegotiationneeded = async (evt) => {
+    pc.onnegotiationneeded = async () => {
       const offer = await pc.createOffer({ iceRestart: false })
       await pc.setLocalDescription(offer)
       ws.send(JSON.stringify({ method: 'offer', params: JSON.stringify(offer) }))
@@ -300,7 +304,7 @@ mc.onopen = () => {
         ws.send(JSON.stringify({ method: 'candidate', params: JSON.stringify(evt.candidate) }))
       }
     }
-    pc.onconnectionstatechange = (evt) => {
+    pc.onconnectionstatechange = () => {
       if (pc.connectionState == 'connected') {
         console.log('peer connection connected')
       }
@@ -335,8 +339,8 @@ mc.onopen = () => {
       case 'candidate':
         candidatesOnQueue.push(new RTCIceCandidate(data))
         if (candidatesOnQueue.length > 0) {
-          candidatesOnQueue.forEach((c) => {
-            console.log('ice candidate', data)
+          candidatesOnQueue.forEach((c: RTCIceCandidate) => {
+            console.log('ice candidate', c)
           })
         }
         pc.addIceCandidate(data).catch((e) => console.log(e))
@@ -371,13 +375,13 @@ mc.onmessage = async (evt: MessageEvent) => {
     case 'connected':
       console.log('connected', msg.data)
       for (let node of msg.data.nodes) {
-        nodes.value[node.id] = { nodeID: node.id }
+        nodes.value[node.id] = { id: node.id, streamID: node.streamID, isVideoEnabled: false }
         streams[node.streamID] = node.id
       }
       return
     case 'join':
       console.log('join', msg.data)
-      nodes.value[msg.data.node] = { nodeID: msg.data.node }
+      nodes.value[msg.data.node] = { id: msg.data.node, streamID: '', isVideoEnabled: false }
       return
     case 'leave':
       console.log('leave', msg.data)
@@ -388,9 +392,10 @@ mc.onmessage = async (evt: MessageEvent) => {
       return
     case 'publish':
       console.log('publish', msg.data, streams)
-      let publishNode = msg.data.node
+      let nodeID = msg.data.node
       let streamID = msg.data.stream
-      streams[streamID] = publishNode
+      streams[streamID] = nodeID
+      nodes.value[nodeID].streamID = streamID
       return
     case 'broadcast':
       console.log('broadcast', msg.data)

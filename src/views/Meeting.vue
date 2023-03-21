@@ -66,7 +66,7 @@
               </div>
             </div>
           </div>
-          <div class="pl-4 flex flex-col">
+          <div class="pl-8 flex flex-col">
             <div class="h-80 overflow-y-auto mb-4">
               <div class="px-4 pt-2" v-for="(v, i) in records" :key="i">
                 <div>
