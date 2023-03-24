@@ -21,6 +21,7 @@ export const VideoConstraints: VideoConstraints = {
     },
     encodings: {
       maxBitrate: 150_000,
+      // @ts-ignore
       maxFramerate: 15.0,
     },
   },
@@ -35,6 +36,7 @@ export const VideoConstraints: VideoConstraints = {
     },
     encodings: {
       maxBitrate: 500_000,
+      // @ts-ignore
       maxFramerate: 30.0,
     },
   },
@@ -49,6 +51,7 @@ export const VideoConstraints: VideoConstraints = {
     },
     encodings: {
       maxBitrate: 1_200_000,
+      // @ts-ignore
       maxFramerate: 30.0,
     },
   },
@@ -63,6 +66,7 @@ export const VideoConstraints: VideoConstraints = {
     },
     encodings: {
       maxBitrate: 2_500_000,
+      // @ts-ignore
       maxFramerate: 30.0,
     },
   },
@@ -77,6 +81,7 @@ export const VideoConstraints: VideoConstraints = {
     },
     encodings: {
       maxBitrate: 4_000_000,
+      // @ts-ignore
       maxFramerate: 30.0,
     },
   },
@@ -91,6 +96,7 @@ export const VideoConstraints: VideoConstraints = {
     },
     encodings: {
       maxBitrate: 8_000_000,
+      // @ts-ignore
       maxFramerate: 30.0,
     },
   },
@@ -142,7 +148,7 @@ export class LocalStream extends MediaStream {
     constraints: Constraints = {
       codec: 'vp8',
       resolution: 'hd',
-      audio: false,
+      audio: true,
       video: true,
       simulcast: false,
     },
@@ -178,6 +184,7 @@ export class LocalStream extends MediaStream {
         ...VideoConstraints[constraints.resolution].resolution,
       };
     }
+    // @ts-ignore
     return constraints.video as MediaTrackConstraints;
   }
 
@@ -217,6 +224,7 @@ export class LocalStream extends MediaStream {
             {
               rid: 'f',
               maxBitrate: VideoConstraints[resolutions[idx]].encodings.maxBitrate,
+              // @ts-ignore
               maxFramerate: VideoConstraints[resolutions[idx]].encodings.maxFramerate,
             },
           ];
@@ -226,6 +234,7 @@ export class LocalStream extends MediaStream {
               rid: 'h',
               scaleResolutionDownBy: 2.0,
               maxBitrate: VideoConstraints[resolutions[idx - 1]].encodings.maxBitrate,
+              // @ts-ignore
               maxFramerate: VideoConstraints[resolutions[idx - 1]].encodings.maxFramerate,
             });
           }
@@ -235,6 +244,7 @@ export class LocalStream extends MediaStream {
               rid: 'q',
               scaleResolutionDownBy: 4.0,
               maxBitrate: VideoConstraints[resolutions[idx - 2]].encodings.maxBitrate,
+              // @ts-ignore
               maxFramerate: VideoConstraints[resolutions[idx - 2]].encodings.maxFramerate,
             });
           }

@@ -228,7 +228,7 @@ export default class Client {
       answer = await this.transports[Role.sub].pc.createAnswer();
       await this.transports[Role.sub].pc.setLocalDescription(answer);
       this.signal.answer(answer);
-    } catch (err) {
+    } catch (err: any) {
       /* tslint:disable-next-line:no-console */
       console.error(err);
       if (this.onerrnegotiate) this.onerrnegotiate(Role.sub, err, description, answer);
@@ -251,7 +251,7 @@ export default class Client {
       await this.transports[Role.pub].pc.setLocalDescription(offer);
       answer = await this.signal.offer(offer);
       await this.transports[Role.pub].pc.setRemoteDescription(answer);
-    } catch (err) {
+    } catch (err: any) {
       /* tslint:disable-next-line:no-console */
       console.error(err);
       if (this.onerrnegotiate) this.onerrnegotiate(Role.pub, err, offer, answer);

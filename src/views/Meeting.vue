@@ -298,7 +298,7 @@ mc.onmessage = async (evt: MessageEvent) => {
 
 let localStream: LocalStream
 const start = async () => {
-  const media = await LocalStream.getUserMedia({
+  const media = await LocalStream.getDisplayMedia({
     resolution: 'vga',
     codec: 'vp8',
     audio: true,
