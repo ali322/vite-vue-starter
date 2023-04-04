@@ -231,7 +231,7 @@ let config: RTCConfiguration = {
 }
 mc = new WebSocket(`${wsURL}/message?room=${roomID}&node=${nodeID}`)
 mc.onopen = () => {
-  ws = new WebSocket(`${relayURL}/p2p?room=${roomID}&node=${nodeID}`)
+  ws = new WebSocket(`${relayURL}/relay?room=${roomID}&node=${nodeID}`)
   ws.onopen = async () => {
     pc = new RTCPeerConnection(config)
     localDC = pc.createDataChannel(`${nodeID}-dc`)
