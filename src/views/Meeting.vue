@@ -190,15 +190,6 @@ mc.onopen = () => {
     console.log('got track', track.id, 'for stream', stream.id)
     const id = stream.id
     const nodeID = streams[id]
-    // mc.send(JSON.stringify({"event": 'publish'}))
-    // let ret = await axios.get(`${baseURL}/room/${roomID}`)
-    // if (ret.status === 200) {
-    //   console.log('data', ret.data)
-    //   // rooms.value = body.data
-    // }
-    // mc.send(JSON.stringify({"event":"nodes"}))
-    // let remotes: Record<string, any> = await signalLocal.call('remotes', null)
-    // console.log('remotes', remotes)
     let el: HTMLVideoElement | null = document.getElementById(
       nodeID
     ) as HTMLVideoElement
@@ -298,7 +289,7 @@ mc.onmessage = async (evt: MessageEvent) => {
 
 let localStream: LocalStream
 const start = async () => {
-  const media = await LocalStream.getDisplayMedia({
+  const media = await LocalStream.getUserMedia({
     resolution: 'vga',
     codec: 'vp8',
     audio: true,
