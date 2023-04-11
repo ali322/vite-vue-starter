@@ -1,7 +1,7 @@
 <template>
   <div class="container">
     <h5 class="text-lg text-gray-600 py-4">
-      当前房间<span class="ml-4 badge badge-secondary">{{ roomID }}</span> (P2P)
+      当前房间<span class="ml-4 badge badge-secondary">{{ roomID }}</span> (Relay)
     </h5>
     <div>
       <div class="px-2 flex">
@@ -78,18 +78,20 @@
       </div>
       <div class="divider"></div>
       <div class="px-2 pb-4">
-        <div>
-          <p class="leading-10 pb-2">远程流 <span class="badge ml-2">{{ switched }}</span></p>
-          <video id="remote-video" class="h-60 m-0 rounded-xl shadow-xl"></video> <br />
+        <div class="flex items-center">
+          <p class="leading-10 pb-2">远程节点</p>
+          <div id="remote-audio"></div>
         </div>
-        <div class="grid grid-cols-8 gap-4" ref="remoteRef">
+        <div class="grid grid-cols-4 gap-4" ref="remoteRef">
           <div v-for="(n, i) in nodes" :key="i">
-            <div class="py-4 px-4 border-2 rounded-md">
-              <p class="leading-10">节点<span class="badge ml-2">{{ n.id }}</span></p>
-              <div class="py-2">
-                <div class="tooltip tooltip-right" v-for="(v, i) in n.streams" :key="i" :data-tip="v.id">
-                <button class="btn btn-xs btn-outline ml-2" :class="{'btn-accent': switched === v.id}"  @click="switchStream(v.id)">{{ i + 1 }}</button>
-                </div>
+            <video :id="n.id" class="rounded-xl shadow-xl"></video>
+            <div class="leding-10 pt-4 flex items-center">
+              <p class="flex-1">节点<span class="badge ml-2">{{ n.id }}</span></p>
+              <div class="form-control">
+                <label class="label cursor-pointer">
+                  <span class="label-text pr-2 text-xs">视频</span>
+                  <input type="checkbox" class="toggle toggle-sm" @change="switchNode(n)" v-model="n.isVideoEnabled" />
+                </label>
               </div>
             </div>
           </div>
@@ -110,10 +112,12 @@ const localRef = ref()
 const toastRef = ref<InstanceType<typeof Toast>>()
 const route = useRoute()
 let err: Ref<string> = ref('')
+let nodes: Ref<Record<string, Record<string, any>>> = ref({})
+const streamMap: Record<string, string> = {}
 const isVideoEnabled = ref(true)
 const isAudioEnabled = ref(true)
 const isRecord = ref(false)
-const switched = ref('')
+const focus = ref('')
 const broadcastMsg = ref('')
 const incomeMsg: Ref<Array<Record<string, string>>> = ref([])
 const datachannelMsg = ref('')
@@ -122,7 +126,6 @@ const records: Ref<Array<Record<string, any>>> = ref([])
 
 let roomID = route.query.id!.toString()
 let nodeID = route.query.node!.toString()
-let nodes: Ref<Record<string, Record<string, any>>> = ref({})
 let ws: WebSocket
 let mc: WebSocket
 let localDC: RTCDataChannel
@@ -192,10 +195,15 @@ const record = () => {
 }
 
 
-const switchStream = (id: string) => {
-  console.log('switch stream id', id)
-  switched.value = id
-  ws.send(JSON.stringify({ method: 'switch', params: id }))
+const switchNode = (node: Record<string, any>) => {
+  // for(let id in nodes.value) {
+  //   if (id !== node.id) {
+  //     nodes.value[id].isVideoEnabled = false
+  //   }
+  // }
+  console.log('node', node)
+  if (node.streams.length === 0) return
+  ws.send(JSON.stringify({ method: 'switch', params: node.streams[0].id }))
 }
 
 onUnmounted(() => {
@@ -217,25 +225,15 @@ const publish = async () => {
 }
 
 let config: RTCConfiguration = {
-  // iceServers: [
-  //   {
-  //     urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'],
-  //   },
-  // ],
   iceServers: [
     {
-      urls: 'turn:1.13.171.19:2003',
-      username: 'root',
-      credential: '321',
-      // @ts-ignore
-      credentialType: 'password'
-    }
+      urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'],
+    },
   ],
-  iceTransportPolicy: 'all'
 }
 mc = new WebSocket(`${wsURL}/message?room=${roomID}&node=${nodeID}`)
 mc.onopen = () => {
-  ws = new WebSocket(`${relayURL}/p2p?room=${roomID}&node=${nodeID}`)
+  ws = new WebSocket(`${relayURL}/selectable?room=${roomID}&node=${nodeID}`)
   ws.onopen = async () => {
     pc = new RTCPeerConnection(config)
     localDC = pc.createDataChannel(`${nodeID}-dc`)
@@ -243,9 +241,22 @@ mc.onopen = () => {
     pc.setLocalDescription(d)
     ws.send(JSON.stringify({ method: 'offer', params: JSON.stringify(d) }))
     pc.ontrack = (evt) => {
+      if (evt.track.kind === 'audio') {
+        let el = document.createElement('audio')
+        el.srcObject = evt.streams[0]
+        el.autoplay = true
+        el.controls = true
+        document.getElementById('remote-audio')?.appendChild(el)
+        return
+      }
       console.log('evt', evt)
-       let el: HTMLVideoElement | null = document.getElementById('remote-video') as HTMLVideoElement
-       if (el !== null) {
+      const id = evt.streams[0].id
+      const nodeID = streamMap[id]
+      let el: HTMLVideoElement | null = document.getElementById(
+        nodeID
+      ) as HTMLVideoElement
+      console.log('el', el, id, evt)
+      if (el !== null) {
         el.srcObject = evt.streams[0]
         el.autoplay = true
         el.controls = true
@@ -261,14 +272,15 @@ mc.onopen = () => {
         }
         evt.streams[0].onremovetrack = () => {
           try {
+
           } catch (err) { }
         }
-       }
+      }
       pc.ondatachannel = (evt) => {
         let receiveChannel = evt.channel
-        // console.log('receive datachannel', receiveChannel)
+        console.log('receive datachannel', receiveChannel)
         receiveChannel.onmessage = (evt) => {
-          // console.log('receive dc message', evt.data)
+          console.log('receive dc message', evt.data)
           let msg = JSON.parse(evt.data)
           incomeData.value.push({
             node: msg.node,
@@ -329,7 +341,7 @@ mc.onopen = () => {
         candidatesOnQueue.push(new RTCIceCandidate(data))
         if (candidatesOnQueue.length > 0) {
           candidatesOnQueue.forEach((c: RTCIceCandidate) => {
-            // console.log('ice candidate', c)
+            console.log('ice candidate', c)
           })
         }
         pc.addIceCandidate(data).catch((e) => console.log(e))
@@ -365,12 +377,14 @@ mc.onmessage = async (evt: MessageEvent) => {
       console.log('connected', msg.data)
       for (let node of msg.data.nodes) {
         nodes.value[node.id] = { id: node.id, streams: node.streams }
-        // streams[node.streamID] = node.id
+        for (let s of node.streams) {
+          streamMap[s.id] = node.id
+        }
       }
       return
     case 'join':
       console.log('join', msg.data)
-      nodes.value[msg.data.node] = { id: msg.data.node, streams: [] }
+      nodes.value[msg.data.node] = { id: msg.data.node, streams: []}
       return
     case 'leave':
       console.log('leave', msg.data)
@@ -388,6 +402,7 @@ mc.onmessage = async (evt: MessageEvent) => {
         streamList = streamList.concat({id: streamID})
       }
       nodes.value[msg.data.node] = {id: nodeID, streams: streamList}
+      streamMap[streamID] = nodeID    
       return
     case 'broadcast':
       console.log('broadcast', msg.data)
@@ -395,7 +410,6 @@ mc.onmessage = async (evt: MessageEvent) => {
         node: msg.from,
         data: msg.data
       })
-      return
   }
 }
 </script>
