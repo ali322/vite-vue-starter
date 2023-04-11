@@ -29,8 +29,12 @@
             <button class="btn btn-sm btn-secondary text-sm" @click="start">
               发布
             </button>
-            <button class="btn btn-sm btn-primary text-sm ml-4" @click="record"
-              :class="{ 'btn-accent': isRecord }">{{ isRecord?'停止': '录制' }}</button>
+            <button class="btn btn-sm text-s ml-2" @click="share">
+              投屏
+            </button>
+            <button class="btn btn-sm btn-primary text-sm ml-4" @click="record" :class="{ 'btn-accent': isRecord }">{{
+              isRecord?'停止': '录制'
+            }}</button>
           </div>
         </div>
         <div class="flex-1 flex">
@@ -71,8 +75,8 @@
               <div class="px-4 pt-2" v-for="(v, i) in records" :key="i">
                 <div>
                   <span class="badge badge-secondary">{{ v.filename }}</span>
-                    <p class="pl-2 text-xs">开始录制: {{ v.startedAt }}</p>
-                    <p class="pl-2 text-xs">结束录制: {{ v.finishedAt }}</p>
+                  <p class="pl-2 text-xs">开始录制: {{ v.startedAt }}</p>
+                  <p class="pl-2 text-xs">结束录制: {{ v.finishedAt }}</p>
                 </div>
               </div>
             </div>
@@ -84,10 +88,7 @@
         <p class="leading-10 pb-2">远程节点</p>
         <div class="grid grid-cols-4 gap-4" ref="remoteRef">
           <div v-for="(n, i) in nodes" :key="i">
-            <video :id="n.nodeID" class="rounded-xl shadow-xl"></video>
-            <p class="leding-10 pt-4">
-              节点<span class="badge ml-2">{{ n.nodeID }}</span>
-            </p>
+            <RemoteStream :streams="n.streams" :id="n.id"/>
           </div>
         </div>
       </div>
@@ -100,6 +101,7 @@ import { ref, Ref, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
 import Toast from '@/components/Toast.vue'
+import RemoteStream from '@/components/RemoteStream.vue'
 import { Client, LocalStream } from '../sdk'
 import { IonSFUJSONRPCSignal } from '../sdk/signal/json-rpc'
 import { wsURL, baseURL, relayURL } from '../config'
@@ -118,7 +120,7 @@ const incomeData: Ref<Array<Record<string, string>>> = ref([])
 const records: Ref<Array<Record<string, any>>> = ref([])
 
 let nodes: Ref<Record<string, Record<string, any>>> = ref({})
-let streams: Record<string, any> = {}
+// let streams: Record<string, any> = {}
 let roomID = route.query.id!.toString()
 let nodeID = route.query.node!.toString()
 
@@ -148,16 +150,22 @@ const broadcast = () => {
 }
 
 let recordSig: WebSocket = new WebSocket(`${relayURL}/record?room=${roomID}&node=${nodeID}`)
+let recordTask = ref('')
 recordSig.onmessage = (evt: MessageEvent) => {
   const msg = JSON.parse(evt.data)
   if (!msg) {
     console.log('message parse failed')
     return
   }
-  switch(msg.event) {
+  switch (msg.event) {
+    case 'record_started':
+      recordTask.value = msg.data['taskID']
+      // records.value.push(msg.data)
+      break
     case 'record_stoped':
       console.log('record stoped', msg.data)
       records.value.push(msg.data)
+      break
   }
 }
 
@@ -167,9 +175,18 @@ const record = () => {
     return
   }
   if (isRecord.value) {
-    recordSig.send(JSON.stringify({ 'event': 'stop_record' }))
+    recordSig.send(JSON.stringify({
+      'event': 'stop_record', 'data': JSON.stringify({
+        streamID: localStream.id, taskID: recordTask.value
+      })
+    }))
   } else {
-    recordSig.send(JSON.stringify({ 'event': 'record' }))
+    recordSig.send(JSON.stringify({
+      'event': 'start_record', 'data': JSON.stringify({
+        isVideoEnabled: true, isAudioEnabled: true,
+        streamID: localStream.id, 
+      })
+    }))
   }
   isRecord.value = !isRecord.value
 }
@@ -189,9 +206,8 @@ mc.onopen = () => {
   clientLocal.ontrack = async (track, stream) => {
     console.log('got track', track.id, 'for stream', stream.id)
     const id = stream.id
-    const nodeID = streams[id]
     let el: HTMLVideoElement | null = document.getElementById(
-      nodeID
+      id
     ) as HTMLVideoElement
     if (el !== null) {
       el.srcObject = stream
@@ -213,9 +229,9 @@ mc.onopen = () => {
           if (nodes.value[nodeID]) {
             delete nodes.value[nodeID]
           }
-          if (streams[id]) {
-            delete streams[id]
-          }
+          // if (streams[id]) {
+          //   delete streams[id]
+          // }
         } catch (err) { }
       }
     }
@@ -224,9 +240,9 @@ mc.onopen = () => {
 
   clientLocal.ondatachannel = (evt) => {
     let receiveChannel = evt.channel
-    console.log('receive datachannel', receiveChannel)
+    // console.log('receive datachannel', receiveChannel)
     receiveChannel.onmessage = (evt) => {
-      console.log('receive dc message', evt.data)
+      // console.log('receive dc message', evt.data)
       let msg = JSON.parse(evt.data)
       incomeData.value.push({
         node: msg.node,
@@ -234,10 +250,10 @@ mc.onopen = () => {
       })
     }
     receiveChannel.onopen = (evt) => {
-      console.log('receive channel open', receiveChannel.readyState)
+      console.log('receive channel open', receiveChannel.label, receiveChannel.readyState)
     }
     receiveChannel.onclose = (evt) => {
-      console.log('receive channel close', receiveChannel.readyState)
+      console.log('receive channel close', receiveChannel.label, receiveChannel.readyState)
     }
   }
 }
@@ -257,13 +273,15 @@ mc.onmessage = async (evt: MessageEvent) => {
     case 'connected':
       console.log('connected', msg.data)
       for (let node of msg.data.nodes) {
-        nodes.value[node.id] = { nodeID: node.id }
-        streams[node.streamID] = node.id
+        nodes.value[node.id] = { id: node.id, streams: node.streams }
+        node.streams.forEach((k: string, v: Record<string, any>) => {
+          // streams[k] = node.id
+        })
       }
       return
     case 'join':
       console.log('join', msg.data)
-      nodes.value[msg.data.node] = { nodeID: msg.data.node }
+      nodes.value[msg.data.node] = { id: msg.data.node, streams: [] }
       return
     case 'leave':
       console.log('leave', msg.data)
@@ -273,10 +291,14 @@ mc.onmessage = async (evt: MessageEvent) => {
       }
       return
     case 'publish':
-      console.log('publish', msg.data, streams)
       let publishNode = msg.data.node
       let streamID = msg.data.stream
-      streams[streamID] = publishNode
+      var streamList: any = nodes.value[publishNode].streams
+      let index = streamList.findIndex((v: any)=>v.id === streamID)
+      if (index === -1) {
+        streamList = streamList.concat({id: streamID})
+      }
+      nodes.value[msg.data.node] = {id: publishNode, streams: streamList}
       return
     case 'broadcast':
       console.log('broadcast', msg.data)
@@ -290,6 +312,21 @@ mc.onmessage = async (evt: MessageEvent) => {
 let localStream: LocalStream
 const start = async () => {
   const media = await LocalStream.getUserMedia({
+    resolution: 'vga',
+    codec: 'vp8',
+    audio: true,
+  })
+  localStream = media
+  localRef.value.srcObject = media
+  localRef.value.autoplay = true
+  localRef.value.controls = true
+  localRef.value.id = media.id
+  localRef.value.muted = true
+  clientLocal.publish(media)
+  // signalLocal.call('publish', { mid: media.id })
+}
+const share = async () => {
+  const media = await LocalStream.getDisplayMedia({
     resolution: 'vga',
     codec: 'vp8',
     audio: true,

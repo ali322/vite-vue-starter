@@ -19,7 +19,6 @@
 <script lang="ts" setup>
 import { onMounted, ref, Ref } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
 import { storeToRefs } from 'pinia'
 import Toast from '@/components/Toast.vue'
 import { baseURL } from '@/config/index'

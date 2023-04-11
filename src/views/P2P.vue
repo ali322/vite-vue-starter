@@ -1,7 +1,7 @@
 <template>
   <div class="container">
     <h5 class="text-lg text-gray-600 py-4">
-      当前房间<span class="ml-4 badge badge-secondary">{{ roomID }}</span> (Relay)
+      当前房间<span class="ml-4 badge badge-secondary">{{ roomID }}</span> (P2P)
     </h5>
     <div>
       <div class="px-2 flex">
@@ -78,19 +78,18 @@
       </div>
       <div class="divider"></div>
       <div class="px-2 pb-4">
-        <div class="flex items-center">
-          <p class="leading-10 pb-2">远程节点</p>
+        <div>
+          <p class="leading-10 pb-2">远程流 <span class="badge ml-2">{{ switched }}</span></p>
+          <video id="remote-video" class="h-60 m-0 rounded-xl shadow-xl"></video> <br />
         </div>
-        <div class="grid grid-cols-4 gap-4" ref="remoteRef">
+        <div class="grid grid-cols-8 gap-4" ref="remoteRef">
           <div v-for="(n, i) in nodes" :key="i">
-            <video :id="n.id" class="rounded-xl shadow-xl"></video>
-            <div class="leding-10 pt-4 flex items-center">
-              <p class="flex-1">节点<span class="badge ml-2">{{ n.id }}</span></p>
-              <div class="form-control">
-                <label class="label cursor-pointer">
-                  <span class="label-text pr-2 text-xs">视频</span>
-                  <input type="checkbox" class="toggle toggle-sm" @change="switchNode(n)" v-model="n.isVideoEnabled" />
-                </label>
+            <div class="py-4 px-4 border-2 rounded-md">
+              <p class="leading-10">节点<span class="badge ml-2">{{ n.id }}</span></p>
+              <div class="py-2">
+                <div class="tooltip tooltip-right" v-for="(v, i) in n.streams" :key="i" :data-tip="v.id">
+                <button class="btn btn-xs btn-outline ml-2" :class="{'btn-accent': switched === v.id}"  @click="switchStream(v.id)">{{ i + 1 }}</button>
+                </div>
               </div>
             </div>
           </div>
@@ -114,7 +113,7 @@ let err: Ref<string> = ref('')
 const isVideoEnabled = ref(true)
 const isAudioEnabled = ref(true)
 const isRecord = ref(false)
-const focus = ref('')
+const switched = ref('')
 const broadcastMsg = ref('')
 const incomeMsg: Ref<Array<Record<string, string>>> = ref([])
 const datachannelMsg = ref('')
@@ -123,7 +122,6 @@ const records: Ref<Array<Record<string, any>>> = ref([])
 
 let roomID = route.query.id!.toString()
 let nodeID = route.query.node!.toString()
-let streams: Record<string, any> = {}
 let nodes: Ref<Record<string, Record<string, any>>> = ref({})
 let ws: WebSocket
 let mc: WebSocket
@@ -194,13 +192,10 @@ const record = () => {
 }
 
 
-const switchNode = (node: Record<string, any>) => {
-  for(let id in nodes.value) {
-    if (id !== node.id) {
-      nodes.value[id].isVideoEnabled = false
-    }
-  }
-  ws.send(JSON.stringify({ method: 'switch', params: node.streamID }))
+const switchStream = (id: string) => {
+  console.log('switch stream id', id)
+  switched.value = id
+  ws.send(JSON.stringify({ method: 'switch', params: id }))
 }
 
 onUnmounted(() => {
@@ -230,7 +225,7 @@ let config: RTCConfiguration = {
 }
 mc = new WebSocket(`${wsURL}/message?room=${roomID}&node=${nodeID}`)
 mc.onopen = () => {
-  ws = new WebSocket(`${relayURL}/relay?room=${roomID}&node=${nodeID}`)
+  ws = new WebSocket(`${relayURL}/p2p?room=${roomID}&node=${nodeID}`)
   ws.onopen = async () => {
     pc = new RTCPeerConnection(config)
     localDC = pc.createDataChannel(`${nodeID}-dc`)
@@ -239,12 +234,8 @@ mc.onopen = () => {
     ws.send(JSON.stringify({ method: 'offer', params: JSON.stringify(d) }))
     pc.ontrack = (evt) => {
       console.log('evt', evt)
-      const id = evt.streams[0].id
-      const nodeID = streams[id]
-      let el: HTMLVideoElement | null = document.getElementById(
-        nodeID
-      ) as HTMLVideoElement
-      if (el !== null) {
+       let el: HTMLVideoElement | null = document.getElementById('remote-video') as HTMLVideoElement
+       if (el !== null) {
         el.srcObject = evt.streams[0]
         el.autoplay = true
         el.controls = true
@@ -260,12 +251,9 @@ mc.onopen = () => {
         }
         evt.streams[0].onremovetrack = () => {
           try {
-            if (streams[id]) {
-              // delete streams[id]
-            }
           } catch (err) { }
         }
-      }
+       }
       pc.ondatachannel = (evt) => {
         let receiveChannel = evt.channel
         // console.log('receive datachannel', receiveChannel)
@@ -366,13 +354,13 @@ mc.onmessage = async (evt: MessageEvent) => {
     case 'connected':
       console.log('connected', msg.data)
       for (let node of msg.data.nodes) {
-        nodes.value[node.id] = { id: node.id, streamID: node.streamID, isVideoEnabled: false }
-        streams[node.streamID] = node.id
+        nodes.value[node.id] = { id: node.id, streams: node.streams }
+        // streams[node.streamID] = node.id
       }
       return
     case 'join':
       console.log('join', msg.data)
-      nodes.value[msg.data.node] = { id: msg.data.node, streamID: '', isVideoEnabled: false }
+      nodes.value[msg.data.node] = { id: msg.data.node, streams: [] }
       return
     case 'leave':
       console.log('leave', msg.data)
@@ -382,11 +370,14 @@ mc.onmessage = async (evt: MessageEvent) => {
       }
       return
     case 'publish':
-      console.log('publish', msg.data, streams)
       let nodeID = msg.data.node
       let streamID = msg.data.stream
-      streams[streamID] = nodeID
-      nodes.value[nodeID].streamID = streamID
+      var streamList: any[] = nodes.value[nodeID].streams
+      let index = streamList.findIndex((v: any)=>v.id === streamID)
+      if (index === -1) {
+        streamList = streamList.concat({id: streamID})
+      }
+      nodes.value[msg.data.node] = {id: nodeID, streams: streamList}
       return
     case 'broadcast':
       console.log('broadcast', msg.data)

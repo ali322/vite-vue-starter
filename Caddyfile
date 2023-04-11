@@ -1,0 +1,10 @@
+(cors) {
+  header Access-Control-Allow-Origin *
+  header Access-Control-Allow-Credentials true
+}
+
+:2021 {
+  root * /Users/alichen/Workspace/lab/wion_frontend/dist
+  try_files {path} /index.html
+  file_server
+}
