@@ -107,7 +107,7 @@
         <p class="leading-10 pb-2">远程节点</p>
         <div class="grid grid-cols-4 gap-4" ref="remoteRef">
           <div v-for="(n, i) in nodes" :key="i">
-            <RemoteStream :streams="n.streams" :id="n.id"/>
+            <RemoteVideo :streams="n.streams" :id="n.id" @refresh="bindStream"/>
           </div>
         </div>
       </div>
@@ -150,8 +150,8 @@ import { ref, Ref, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
 import Toast from '@/components/Toast.vue'
-import RemoteStream from '@/components/RemoteStream.vue'
-import { Client, LocalStream } from '../sdk'
+import RemoteVideo from '@/components/RemoteVideo.vue'
+import { Client, LocalStream, RemoteStream } from '../sdk'
 import { IonSFUJSONRPCSignal } from '../sdk/signal/json-rpc'
 import { wsURL, baseURL, relayURL } from '../config'
 
@@ -175,7 +175,7 @@ const isScreenRecord = ref(false)
 const screenRecords: Ref<Array<Record<string, any>>> = ref([])
 
 let nodes: Ref<Record<string, Record<string, any>>> = ref({})
-// let streams: Record<string, any> = {}
+let remoteStreams: Record<string, RemoteStream> = {}
 let roomID = route.query.id!.toString()
 let nodeID = route.query.node!.toString()
 
@@ -277,6 +277,19 @@ const recordScreen = () => {
   isScreenRecord.value = !isScreenRecord.value
 }
 
+const bindStream = () => {
+  Object.keys(remoteStreams).forEach((k: string) => {
+    let el: HTMLVideoElement | null = document.getElementById(
+      k
+    ) as HTMLVideoElement
+    if (el !== null) {
+      el.srcObject = remoteStreams[k]
+      el.autoplay = true
+      el.controls = true
+    }
+  })
+}
+
 onUnmounted(() => {
   clientLocal.close()
 })
@@ -320,6 +333,8 @@ mc.onopen = () => {
           // }
         } catch (err) { }
       }
+    } else {
+      remoteStreams[id] = stream
     }
   }
 

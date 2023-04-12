@@ -224,7 +224,7 @@ let config: RTCConfiguration = {
   // ],
   iceServers: [
     {
-      urls: 'turn:1.13.171.19:2003',
+      urls: 'turn:jp.252798.xyz:2005',
       username: 'root',
       credential: '321',
       // @ts-ignore

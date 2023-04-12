@@ -86,20 +86,21 @@ export default class Client {
     signal: Signal,
     config: Configuration = {
       codec: 'vp8',
-    //       iceServers: [
-    //   {
-    //     urls: 'turn:1.13.171.19:2003',
-    //     username: 'root',
-    //     credential: '321',
-    //     credentialType: 'password'
-    //   }
-    // ],
-    // iceTransportPolicy: 'all'
       iceServers: [
-        {
-          urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'],
-        },
-      ],
+      {
+        urls: 'turn:195.245.242.126:2005',
+        username: 'root',
+        credential: '321',
+        // @ts-ignore
+        credentialType: 'password'
+      }
+    ],
+    iceTransportPolicy: 'all'
+      // iceServers: [
+      //   {
+      //     urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'],
+      //   },
+      // ],
     },
   ) {
     this.signal = signal;

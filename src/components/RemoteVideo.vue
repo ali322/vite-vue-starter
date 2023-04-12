@@ -5,7 +5,10 @@
   </div>
   <p class="leding-10 pt-4 flex">
     <div class="flex-1">节点<span class="badge ml-2">{{ props.id }}</span></div>
-    <button class="btn btn-xs btn-outline text-sm" @click="switchStream">切换</button>
+    <div class="flex">    
+      <button class="btn btn-xs btn-outline text-sm" @click="emits('refresh')">刷新</button>
+      <button class="btn btn-xs btn-outline text-sm ml-2" @click="switchStream">切换</button>
+    </div>
   </p>
 </template>
 <script lang="ts" setup>
@@ -14,6 +17,10 @@ import { ref } from 'vue'
 const props = defineProps<{
   streams: Array<Record<string, any>>,
   id: string
+}>()
+
+const emits = defineEmits<{
+  (e: 'refresh'): void
 }>()
 
 const selected = ref(0)

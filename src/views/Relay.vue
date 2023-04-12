@@ -222,11 +222,21 @@ const publish = async () => {
 }
 
 let config: RTCConfiguration = {
+  // iceServers: [
+  //   {
+  //     urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'],
+  //   },
+  // ],
   iceServers: [
     {
-      urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'],
-    },
+      urls: 'turn:jp.252798.xyz:2005',
+      username: 'root',
+      credential: '321',
+      // @ts-ignore
+      credentialType: 'password'
+    }
   ],
+  iceTransportPolicy: 'all'
 }
 mc = new WebSocket(`${wsURL}/message?room=${roomID}&node=${nodeID}`)
 mc.onopen = () => {

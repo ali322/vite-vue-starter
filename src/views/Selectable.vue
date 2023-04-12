@@ -1,7 +1,7 @@
 <template>
   <div class="container">
     <h5 class="text-lg text-gray-600 py-4">
-      当前房间<span class="ml-4 badge badge-secondary">{{ roomID }}</span> (Relay)
+      当前房间<span class="ml-4 badge badge-secondary">{{ roomID }}</span> (Selectable)
     </h5>
     <div>
       <div class="px-2 flex">
@@ -193,11 +193,6 @@ const record = () => {
 
 
 const switchStream = (id: string) => {
-  // for(let id in nodes.value) {
-  //   if (id !== node.id) {
-  //     nodes.value[id].isVideoEnabled = false
-  //   }
-  // }
   selectedStream.value = id
   ws.send(JSON.stringify({ method: 'switch', params: id }))
 }
@@ -221,11 +216,21 @@ const publish = async () => {
 }
 
 let config: RTCConfiguration = {
+  // iceServers: [
+  //   {
+  //     urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'],
+  //   },
+  // ],
   iceServers: [
     {
-      urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'],
-    },
+      urls: 'turn:jp.252798.xyz:2005',
+      username: 'root',
+      credential: '321',
+      // @ts-ignore
+      credentialType: 'password'
+    }
   ],
+  iceTransportPolicy: 'all'
 }
 mc = new WebSocket(`${wsURL}/message?room=${roomID}&node=${nodeID}`)
 mc.onopen = () => {
