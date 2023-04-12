@@ -1,17 +1,18 @@
 <template>
   <div class="container">
-    <h5 class="text-lg text-gray-600 py-4">
-      当前房间<span class="ml-4 badge badge-secondary">{{ roomID }}</span>
+    <h5 class="text-lg flex text-gray-600 py-4">
+        <div>当前房间<span class="ml-4 badge">{{ roomID }}</span></div>
+        <div class="pl-4">当前节点<span class="ml-4 badge">{{ nodeID }}</span></div>
     </h5>
     <div>
       <div class="px-2 flex">
-        <div class="w-72">
-          <p class="pl-2 leading-10">本地节点</p>
+                <div class="w-72">
+          <div class="flex items-center justify-between">
+            <div class="pl-2 leading-10">本地媒体</div>
+            <label for="local-media-record" class="btn btn-xs btn-outline text-sm">录制记录</label>
+          </div>
           <video class="h-40 m-0 rounded-xl shadow-xl" autoplay ref="localRef"></video>
-          <div class="flex items-center">
-            <p class="leading-10 py-4 flex-1">
-              节点 <span class="badge">{{ nodeID }}</span>
-            </p>
+          <div class="flex items-center justify-center">
             <div class="form-control">
               <label class="label cursor-pointer">
                 <span class="label-text pr-2 text-xs">视频</span>
@@ -25,20 +26,38 @@
               </label>
             </div>
           </div>
-          <div class="flex items-center">
+          <div class="flex items-center justify-center">
             <button class="btn btn-sm btn-secondary text-sm" @click="start">
               发布
             </button>
-            <button class="btn btn-sm text-s ml-2" @click="share">
-              投屏
-            </button>
-            <button class="btn btn-sm btn-primary text-sm ml-4" @click="record" :class="{ 'btn-accent': isRecord }">{{
-              isRecord?'停止': '录制'
-            }}</button>
+            <button class="btn btn-sm btn-primary text-sm ml-4" @click="recordMedia"
+              :class="{ 'btn-accent': isMediaRecord }">{{
+                isMediaRecord ? '停止' : '录制' }}</button>
+          </div>
+        </div>
+        <div class="w-72 pl-4">
+          <div class="flex items-center justify-between">
+            <div class="pl-2 leading-10">本地屏幕</div>
+            <label for="local-screen-record" class="btn btn-xs btn-outline text-sm">录制记录</label>
+          </div>
+          <video class="h-40 m-0 rounded-xl shadow-xl" autoplay ref="screenRef"></video>
+          <div class="flex items-center justify-center">
+            <div class="form-control">
+              <label class="label cursor-pointer">
+                <span class="label-text pr-2 text-xs">视频</span>
+                <input type="checkbox" class="toggle toggle-sm" v-model="isScreenVideoEnabled" />
+              </label>
+            </div>
+          </div>
+          <div class="flex items-center justify-center">
+            <label for="my-modal" class="btn btn-sm text-sm ml-4" @click="share">投屏</label>
+            <button class="btn btn-sm btn-primary text-sm ml-4" @click="recordScreen"
+              :class="{ 'btn-accent': isScreenRecord }">{{
+                isScreenRecord ? '停止' : '录制' }}</button>
           </div>
         </div>
         <div class="flex-1 flex">
-          <div class="pl-8 flex flex-col">
+          <div class="pl-4 flex flex-col">
             <div class="h-60 overflow-y-auto bg-slate-100 rounded-xl mb-4">
               <div class="px-4 pt-2" v-for="(v, i) in incomeMsg" :key="i">
                 <div>
@@ -54,7 +73,7 @@
               </div>
             </div>
           </div>
-          <div class="pl-8 flex flex-col">
+          <div class="pl-4 flex flex-col">
             <div class="h-60 overflow-y-auto bg-slate-100 rounded-xl mb-4">
               <div class="px-4 pt-2" v-for="(v, i) in incomeData" :key="i">
                 <div>
@@ -93,6 +112,36 @@
         </div>
       </div>
     </div>
+        <div>
+      <input type="checkbox" id="local-media-record" class="modal-toggle" />
+      <label for="local-media-record" class="modal cursor-pointer">
+        <label class="modal-box relative" for="">
+          <h3 class="text-lg font-bold">本地媒体录制记录</h3>
+          <div class="px-4" v-for="(v, i) in mediaRecords" :key="i">
+            <div class="text-left">
+              <span class="badge badge-secondary text-xs">{{ v.filename.join(',') }}</span>
+              <p class="pl-2 text-xs">开始录制: {{ v.startedAt }}</p>
+              <p class="pl-2 text-xs">结束录制: {{ v.finishedAt }}</p>
+            </div>
+          </div>
+        </label>
+      </label>
+    </div>
+    <div>
+      <input type="checkbox" id="local-screen-record" class="modal-toggle" />
+      <label for="local-screen-record" class="modal cursor-pointer">
+        <label class="modal-box relative" for="">
+          <h3 class="text-lg font-bold">本地屏幕录制记录</h3>
+          <div class="px-4" v-for="(v, i) in mediaRecords" :key="i">
+            <div class="text-left">
+              <span class="badge badge-secondary text-xs">{{ v.filename }}</span>
+              <p class="pl-2 text-xs">开始录制: {{ v.startedAt }}</p>
+              <p class="pl-2 text-xs">结束录制: {{ v.finishedAt }}</p>
+            </div>
+          </div>
+        </label>
+      </label>
+    </div>
     <Toast ref="toastRef" />
   </div>
 </template>
@@ -109,15 +158,21 @@ import { wsURL, baseURL, relayURL } from '../config'
 const toastRef = ref<InstanceType<typeof Toast>>()
 const route = useRoute()
 const localRef = ref()
+const screenRef = ref()
 const remoteRef = ref()
 const isVideoEnabled = ref(true)
 const isAudioEnabled = ref(true)
+const isScreenVideoEnabled = ref(true)
 const isRecord = ref(false)
 const broadcastMsg = ref('')
 const incomeMsg: Ref<Array<Record<string, string>>> = ref([])
 const datachannelMsg = ref('')
 const incomeData: Ref<Array<Record<string, string>>> = ref([])
 const records: Ref<Array<Record<string, any>>> = ref([])
+const isMediaRecord = ref(false)
+const mediaRecords: Ref<Array<Record<string, any>>> = ref([])
+const isScreenRecord = ref(false)
+const screenRecords: Ref<Array<Record<string, any>>> = ref([])
 
 let nodes: Ref<Record<string, Record<string, any>>> = ref({})
 // let streams: Record<string, any> = {}
@@ -150,7 +205,8 @@ const broadcast = () => {
 }
 
 let recordSig: WebSocket = new WebSocket(`${relayURL}/record?room=${roomID}&node=${nodeID}`)
-let recordTask = ref('')
+let recordMediaTask = ref('')
+let recordScreenTask = ref('')
 recordSig.onmessage = (evt: MessageEvent) => {
   const msg = JSON.parse(evt.data)
   if (!msg) {
@@ -158,37 +214,67 @@ recordSig.onmessage = (evt: MessageEvent) => {
     return
   }
   switch (msg.event) {
-    case 'record_started':
-      recordTask.value = msg.data['taskID']
-      // records.value.push(msg.data)
-      break
     case 'record_stoped':
       console.log('record stoped', msg.data)
-      records.value.push(msg.data)
+      if(localMedia != null && msg.data['streamID'] === localMedia.id) {
+        mediaRecords.value.push(msg.data)
+      } else if(localScreen != null && msg.data['streamID'] === localScreen.id) {
+        screenRecords.value.push(msg.data)
+      }
+      break
+    case 'record_started':
+      console.log('record started', msg.data)
+      if (localMedia != null && msg.data['streamID'] === localMedia.id) {
+        recordMediaTask.value = msg.data['taskID']
+      } else if (localScreen != null && msg.data['streamID'] === localScreen.id) {
+        recordScreenTask.value = msg.data['taskID']
+      }
       break
   }
 }
 
-const record = () => {
+const recordMedia = () => {
   if (recordSig.readyState !== WebSocket.OPEN) {
     toastRef.value?.error('记录信令未开启')
     return
   }
-  if (isRecord.value) {
+  if (isMediaRecord.value) {
     recordSig.send(JSON.stringify({
       'event': 'stop_record', 'data': JSON.stringify({
-        streamID: localStream.id, taskID: recordTask.value
+        streamID: localMedia.id, taskID: recordMediaTask.value
       })
     }))
   } else {
     recordSig.send(JSON.stringify({
       'event': 'start_record', 'data': JSON.stringify({
         isVideoEnabled: true, isAudioEnabled: true,
-        streamID: localStream.id, 
+        streamID: localMedia.id, 
       })
     }))
   }
-  isRecord.value = !isRecord.value
+  isMediaRecord.value = !isMediaRecord.value
+}
+
+const recordScreen = () => {
+  if (recordSig.readyState !== WebSocket.OPEN) {
+    toastRef.value?.error('记录信令未开启')
+    return
+  }
+  if (isScreenRecord.value) {
+    recordSig.send(JSON.stringify({
+      'event': 'stop_record', 'data': JSON.stringify({
+        streamID: localScreen.id, taskID: recordScreenTask.value
+      })
+    }))
+  } else {
+    recordSig.send(JSON.stringify({
+      'event': 'start_record', 'data': JSON.stringify({
+        isVideoEnabled: true, isAudioEnabled: false,
+        streamID: localScreen.id, 
+      })
+    }))
+  }
+  isScreenRecord.value = !isScreenRecord.value
 }
 
 onUnmounted(() => {
@@ -306,17 +392,18 @@ mc.onmessage = async (evt: MessageEvent) => {
         node: msg.from,
         data: msg.data
       })
+      return
   }
 }
 
-let localStream: LocalStream
+let localMedia: LocalStream
 const start = async () => {
   const media = await LocalStream.getUserMedia({
     resolution: 'vga',
     codec: 'vp8',
     audio: true,
   })
-  localStream = media
+  localMedia = media
   localRef.value.srcObject = media
   localRef.value.autoplay = true
   localRef.value.controls = true
@@ -325,33 +412,44 @@ const start = async () => {
   clientLocal.publish(media)
   // signalLocal.call('publish', { mid: media.id })
 }
+
+watch(isVideoEnabled, (isChecked: boolean) => {
+  if (isChecked) {
+    localMedia.unmute('video')
+  } else {
+    localMedia.mute('video')
+  }
+})
+watch(isAudioEnabled, (isChecked: boolean) => {
+  if (isChecked) {
+    localMedia.unmute('audio')
+  } else {
+    localMedia.mute('audio')
+  }
+})
+
+let localScreen: LocalStream
 const share = async () => {
   const media = await LocalStream.getDisplayMedia({
     resolution: 'vga',
     codec: 'vp8',
     audio: true,
   })
-  localStream = media
-  localRef.value.srcObject = media
-  localRef.value.autoplay = true
-  localRef.value.controls = true
-  localRef.value.id = media.id
-  localRef.value.muted = true
+  localScreen = media
+  screenRef.value.srcObject = media
+  screenRef.value.autoplay = true
+  screenRef.value.controls = true
+  screenRef.value.id = media.id
+  screenRef.value.muted = true
   clientLocal.publish(media)
   // signalLocal.call('publish', { mid: media.id })
 }
+
 watch(isVideoEnabled, (isChecked: boolean) => {
   if (isChecked) {
-    localStream.unmute('video')
+    localScreen.unmute('video')
   } else {
-    localStream.mute('video')
-  }
-})
-watch(isAudioEnabled, (isChecked: boolean) => {
-  if (isChecked) {
-    localStream.unmute('audio')
-  } else {
-    localStream.mute('audio')
+    localScreen.mute('video')
   }
 })
 </script>

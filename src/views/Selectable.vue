@@ -87,11 +87,8 @@
             <video :id="n.id" class="rounded-xl shadow-xl"></video>
             <div class="leding-10 pt-4 flex items-center">
               <p class="flex-1">节点<span class="badge ml-2">{{ n.id }}</span></p>
-              <div class="form-control">
-                <label class="label cursor-pointer">
-                  <span class="label-text pr-2 text-xs">视频</span>
-                  <input type="checkbox" class="toggle toggle-sm" @change="switchNode(n)" v-model="n.isVideoEnabled" />
-                </label>
+              <div>
+                <button class="btn btn-xs btn-outline ml-2" :class="{'btn-accent': selectedStream === s.id}" v-for="(s, i) in n.streams" :key="i" @click="switchStream(s.id)">{{ i + 1}}</button>
               </div>
             </div>
           </div>
@@ -117,7 +114,6 @@ const streamMap: Record<string, string> = {}
 const isVideoEnabled = ref(true)
 const isAudioEnabled = ref(true)
 const isRecord = ref(false)
-const focus = ref('')
 const broadcastMsg = ref('')
 const incomeMsg: Ref<Array<Record<string, string>>> = ref([])
 const datachannelMsg = ref('')
@@ -131,6 +127,7 @@ let mc: WebSocket
 let localDC: RTCDataChannel
 let pc: RTCPeerConnection
 let localStream: MediaStream
+const selectedStream = ref('')
 
 watch(isVideoEnabled, (isChecked: boolean) => {
   if (isChecked) {
@@ -195,15 +192,14 @@ const record = () => {
 }
 
 
-const switchNode = (node: Record<string, any>) => {
+const switchStream = (id: string) => {
   // for(let id in nodes.value) {
   //   if (id !== node.id) {
   //     nodes.value[id].isVideoEnabled = false
   //   }
   // }
-  console.log('node', node)
-  if (node.streams.length === 0) return
-  ws.send(JSON.stringify({ method: 'switch', params: node.streams[0].id }))
+  selectedStream.value = id
+  ws.send(JSON.stringify({ method: 'switch', params: id }))
 }
 
 onUnmounted(() => {
