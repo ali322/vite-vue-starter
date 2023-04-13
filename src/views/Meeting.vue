@@ -104,10 +104,13 @@
       </div>
       <div class="divider"></div>
       <div class="px-2 pb-4">
-        <p class="leading-10 pb-2">远程节点</p>
+        <div class="flex items-center">
+          <p class="leading-10 mr-4">远程节点</p>
+          <button class="btn btn-xs btn-outline text-sm" @click="bindStream">刷新</button>
+        </div>
         <div class="grid grid-cols-4 gap-4" ref="remoteRef">
           <div v-for="(n, i) in nodes" :key="i">
-            <RemoteVideo :streams="n.streams" :id="n.id" @refresh="bindStream"/>
+            <RemoteVideo :streams="n.streams" :id="n.id" />
           </div>
         </div>
       </div>
